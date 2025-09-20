@@ -29,17 +29,95 @@ fn smoke_long() {
 
 #[test]
 fn capacity() {
-    todo!()
+    for i in 1..10 {
+        let q = HeapBackedQueue::<i32>::new(i);
+        assert_eq!(q.capacity(), i);
+    }
 }
 
 #[test]
 fn len_empty_full() {
-    todo!()
+    let q = HeapBackedQueue::new(2);
+
+    assert_eq!(q.len(), 0);
+    assert!(q.is_empty());
+    assert!(!q.is_full());
+
+    q.push(()).unwrap();
+
+    assert_eq!(q.len(), 1);
+    assert!(!q.is_empty());
+    assert!(!q.is_full());
+
+    q.push(()).unwrap();
+
+    assert_eq!(q.len(), 2);
+    assert!(!q.is_empty());
+    assert!(q.is_full());
+
+    q.pop().unwrap();
+
+    assert_eq!(q.len(), 1);
+    assert!(!q.is_empty());
+    assert!(!q.is_full());
 }
 
 #[test]
 fn len() {
-    todo!()
+    const COUNT: usize = 25_000;
+    const CAP: usize = 1000;
+    const ITERS: usize = CAP / 20;
+
+    let q = HeapBackedQueue::new(CAP);
+    assert_eq!(q.len(), 0);
+    assert_eq!(q.capacity(), CAP);
+
+    for _ in 0..CAP / 10 {
+        for i in 0..ITERS {
+            q.push(i).unwrap();
+            assert_eq!(q.len(), i + 1);
+        }
+
+        for i in 0..ITERS {
+            q.pop().unwrap();
+            assert_eq!(q.len(), ITERS - i - 1);
+        }
+    }
+    assert_eq!(q.len(), 0);
+
+    for i in 0..CAP {
+        q.push(i).unwrap();
+        assert_eq!(q.len(), i + 1);
+    }
+
+    for _ in 0..CAP {
+        q.pop().unwrap();
+    }
+    assert_eq!(q.len(), 0);
+
+    scope(|scope| {
+        scope.spawn(|| {
+            for i in 0..COUNT {
+                loop {
+                    if let Some(x) = q.pop() {
+                        assert_eq!(x, i);
+                        break;
+                    }
+                }
+                let len = q.len();
+                assert!(len <= CAP);
+            }
+        });
+
+        scope.spawn(|| {
+            for i in 0..COUNT {
+                while q.push(i).is_err() {}
+                let len = q.len();
+                assert!(len <= CAP);
+            }
+        });
+    });
+    assert_eq!(q.len(), 0);
 }
 
 #[test]
@@ -161,9 +239,4 @@ fn linearizable() {
             });
         }
     })
-}
-
-#[test]
-fn into_iter() {
-    todo!()
 }

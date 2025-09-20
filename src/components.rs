@@ -1,6 +1,6 @@
 use ::core::{
     array,
-    sync::atomic::{AtomicPtr, AtomicU64, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
 };
 #[cfg(feature = "alloc")]
 use alloc::boxed::Box;
@@ -130,14 +130,17 @@ pub(crate) struct TaggedItemInner<T> {
 }
 
 #[cfg(feature = "tagged_ptr")]
+#[allow(unused)]
 impl<T> TaggedItemInner<T> {
-    fn from_components(&self, count: u64, ptr: *const T) -> Self {
-        let count: u64 = count << 48;
-        let ptr = count | ptr as usize as u64;
+    pub fn from_tagged(ptr: u64) -> Self {
         Self {
             ptr: AtomicU64::new(ptr),
             _data: PhantomData,
         }
+    }
+
+    pub fn from_components(count: u64, ptr: *const T) -> Self {
+        Self::from_tagged(components_as_tagged(count, ptr))
     }
 }
 

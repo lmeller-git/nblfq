@@ -1,4 +1,5 @@
 use core::{
+    fmt::Debug,
     marker::PhantomData,
     ptr::null,
     sync::atomic::{AtomicUsize, Ordering},
@@ -18,8 +19,19 @@ pub struct HeaplessQueue<const N: usize, T>(ArrayQueue<T, components::HeaplessBu
 pub struct HeapBackedQueue<T>(ArrayQueue<T, components::FixedBuf<T>>);
 
 pub(crate) struct ArrayQueue<T, B: components::Buffer<T>> {
+    /// The buffer of the queue holding Item<T>'s
     buffer: B,
+    /// The head of the queue.
+    ///
+    /// This value indicates the next slot that can be pushed to.
+    ///
+    /// This value may be stale and must be checked for critical operations.
     head: AtomicUsize,
+    /// The tail of the queue.
+    ///
+    /// This value indicates the next slot that can be popped from.
+    ///
+    /// This value may be stale and must be checked for critical operations.
     tail: AtomicUsize,
     _data: PhantomData<T>,
 }
@@ -132,17 +144,14 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
                 head = (head + 1) % self.buffer.len();
             };
             let mut new_counter = count;
-            // println!("found head: {}", head);
             if prev_ptr.is_null() {
                 // empty list
                 new_counter = (count + PtrType::<T>::MAX_W - 1) % PtrType::<T>::MAX_W;
-                // println!("empty, count: {new_counter}");
             }
 
             if head == 0 {
                 // wrap around
                 new_counter = (new_counter + 1) % PtrType::<T>::MAX_W;
-                // println!("wrapping, count: {new_counter}");
             }
 
             if self
@@ -155,10 +164,57 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
             {
                 self.head
                     .store((head + 1) % self.buffer.len(), Ordering::Release);
-                // println!("done");
                 return Ok(());
             }
         }
+    }
+
+    /// Returns the total capacity of the underlying buffer.
+    pub fn capacity(&self) -> usize {
+        self.buffer.len()
+    }
+
+    /// Returns the current len of the queue.
+    /// This value may be stale.
+    pub fn len(&self) -> usize {
+        let head = self.head.load(Ordering::Acquire);
+        let tail = self.tail.load(Ordering::Acquire);
+        if head != tail {
+            if head < tail {
+                // wrap around
+                self.capacity() - tail + head
+            } else {
+                // no wrap around
+                head - tail
+            }
+        } else {
+            // may be full or empty
+            let (_, item) = self
+                .buffer
+                .inner()
+                .get(head)
+                .expect("head outside of cap")
+                .components();
+            if item.is_null() {
+                // empty
+                0
+            } else {
+                // full
+                self.capacity()
+            }
+        }
+    }
+
+    /// Indicates whether the queue is empty.
+    /// The result may be stale.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Indicates whether the queue is full.
+    /// The result may be stale.
+    pub fn is_full(&self) -> bool {
+        self.len() == self.capacity()
     }
 }
 
@@ -167,6 +223,7 @@ impl<T> HeapBackedQueue<T> {
     pub fn new(size: usize) -> Self {
         Self(ArrayQueue::new_in(components::FixedBuf::new(size)))
     }
+
     /// Attempts to push an item into the queue.
     /// Returns the item as an error if the queue is full.
     pub fn push(&self, item: T) -> Result<(), T> {
@@ -210,33 +267,119 @@ impl<T> HeapBackedQueue<T> {
     pub fn pop_ref(&self) -> Option<&'static T> {
         self.0.pop().map(|item| unsafe { &*item })
     }
+
+    /// Returns the total capacity of the underlying buffer.
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    /// Returns the current len of the queue.
+    /// This value may be stale.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Indicates whether the queue is empty.
+    /// The result may be stale.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Indicates whether the queue is full.
+    /// The result may be stale.
+    pub fn is_full(&self) -> bool {
+        self.0.is_full()
+    }
 }
 
 impl<const N: usize, T> HeaplessQueue<N, T> {
     pub fn new() -> Self {
         Self(ArrayQueue::new_in(components::HeaplessBuf::new()))
     }
+
     /// Attempts to push an item into the queue.
     /// Returns the item as an error if the queue is full.
-    pub fn push(&self, item: &'static T) -> Result<(), &'static T> {
+    pub fn push_ref(&self, item: &'static T) -> Result<(), &'static T> {
         let item = item as *const T;
         self.0.push(item).map_err(|item| unsafe { &*item })
     }
 
     /// Pushes an item into the queue, overwriting the last item if it is full
-    pub fn force_push(&self, item: &'static T) -> Option<&'static T> {
+    pub fn force_push_ref(&self, item: &'static T) -> Option<&'static T> {
         let item = item as *const T;
         self.0.force_push(item).map(|item| unsafe { &*item })
     }
 
     /// pop the last item, if an item is contained
-    pub fn pop(&self) -> Option<&'static T> {
+    pub fn pop_ref(&self) -> Option<&'static T> {
         self.0.pop().map(|item| unsafe { &*item })
+    }
+
+    /// Returns the total capacity of the underlying buffer.
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    /// Returns the current len of the queue.
+    /// This value may be stale.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Indicates whether the queue is empty.
+    /// The result may be stale.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Indicates whether the queue is full.
+    /// The result may be stale.
+    pub fn is_full(&self) -> bool {
+        self.0.is_full()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<const N: usize, T> HeaplessQueue<N, T> {
+    /// Attempts to push an item into the queue.
+    /// Returns the item as an error if the queue is full.
+    pub fn push(&self, item: T) -> Result<(), T> {
+        let item = Box::into_raw(Box::new(item));
+        self.0
+            .push(item)
+            .map_err(|item| unsafe { *Box::from_raw(item as *mut T) })
+    }
+
+    /// Pushes an item into the queue, overwriting the last item if it is full
+    pub fn force_push(&self, item: T) -> Option<T> {
+        let item = Box::into_raw(Box::new(item));
+        self.0
+            .force_push(item)
+            .map(|item| unsafe { *Box::from_raw(item as *mut T) })
+    }
+
+    /// pop the last item, if an item is contained
+    pub fn pop(&self) -> Option<T> {
+        self.0
+            .pop()
+            .map(|item| unsafe { *Box::from_raw(item as *mut T) })
     }
 }
 
 impl<const N: usize, T> Default for HeaplessQueue<N, T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T> Debug for HeapBackedQueue<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.pad("HeapBackedQueue { ... }")
+    }
+}
+impl<const N: usize, T> Debug for HeaplessQueue<N, T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.pad("HeaplessQueue { ... }")
     }
 }
