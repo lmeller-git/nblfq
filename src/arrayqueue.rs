@@ -48,27 +48,6 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
 }
 
 impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
-    /// Attempts to push an item into the queue.
-    /// Returns the item as an error if the queue is full.
-    pub fn push(&self, item: *const T) -> Result<(), *const T> {
-        self.push_or_else(item, |_, _, _| Err(item))
-    }
-
-    /// Pushes an item into the queue, overwriting the last item if it is full
-    pub fn force_push(&self, item: *const T) -> Option<*const T> {
-        self.push_or_else(item, |mut prev_count, current_item, head| {
-            if head == 0 {
-                prev_count = (prev_count + 1) % PtrType::<T>::MAX_W;
-            }
-            if let Ok((_, value)) = current_item.cmpxchg(null(), prev_count, item, prev_count) {
-                Err(value)
-            } else {
-                Ok(())
-            }
-        })
-        .err()
-    }
-
     /// pop the last item, if an item is contained
     pub fn pop(&self) -> Option<*const T> {
         loop {
@@ -108,10 +87,9 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
         }
     }
 
-    fn push_or_else<F>(&self, item: *const T, f: F) -> Result<(), *const T>
-    where
-        F: Fn(u64, &Item<T>, usize) -> Result<(), *const T>,
-    {
+    /// Attempts to push an item into the queue.
+    /// Returns the item as an error if the queue is full.
+    fn push(&self, item: *const T) -> Result<(), *const T> {
         let mut head = self.head.load(Ordering::Acquire);
         loop {
             let (count, prev_ptr) = loop {
@@ -137,8 +115,7 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
                     }
                     if !prev_ptr.is_null() && !current_ptr.is_null() {
                         // list full
-                        // TODO: call f() with relevant args here
-                        f(prev_count, current_item, head)?;
+                        return Err(item);
                     }
                 }
                 head = (head + 1) % self.buffer.len();
@@ -234,11 +211,24 @@ impl<T> HeapBackedQueue<T> {
     }
 
     /// Pushes an item into the queue, overwriting the last item if it is full
+    /// This method does NOT guarantee atomicity. It simply calls pop(), until push() is succesfull.
+    /// This also means that this method may spin for some time.
+    /// The last popped item is returned, if the queue was full
     pub fn force_push(&self, item: T) -> Option<T> {
-        let item = Box::into_raw(Box::new(item));
-        self.0
-            .force_push(item)
-            .map(|item| unsafe { *Box::from_raw(item as *mut T) })
+        let mut popped_item = None;
+        let mut container = item;
+        let mut backoff = 1;
+        while let Err(item) = self.push(container) {
+            container = item;
+            for _ in 0..backoff {
+                use core::hint::spin_loop;
+
+                spin_loop();
+            }
+            backoff = (backoff * 2).min(1024);
+            popped_item = self.pop();
+        }
+        popped_item
     }
 
     /// pop the last item, if an item is contained
@@ -285,9 +275,22 @@ impl<const N: usize, T> HeaplessQueue<N, T> {
     }
 
     /// Pushes an item into the queue, overwriting the last item if it is full
+    /// This method does NOT guarantee atomicity. It simply calls pop(), until push() is succesfull.
+    /// This also means that this method may spin for some time.
+    /// The last popped item is returned, if the queue was full
     pub fn force_push(&self, item: &'static T) -> Option<&'static T> {
-        let item = item as *const T;
-        self.0.force_push(item).map(|item| unsafe { &*item })
+        let mut popped_item = None;
+        let mut backoff = 1;
+        while self.push(item).is_err() {
+            for _ in 0..backoff {
+                use core::hint::spin_loop;
+
+                spin_loop();
+            }
+            backoff = (backoff * 2).min(1024);
+            popped_item = self.pop();
+        }
+        popped_item
     }
 
     /// pop the last item, if an item is contained

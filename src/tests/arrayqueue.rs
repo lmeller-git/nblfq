@@ -231,6 +231,53 @@ fn mpmc() {
 }
 
 #[test]
+fn mpmc_ring_buffer() {
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
+    const COUNT: usize = 25_000;
+    const THREADS: usize = 2;
+
+    let t = AtomicUsize::new(THREADS);
+    let q: HeapBackedQueue<usize> = HeapBackedQueue::new(3);
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                loop {
+                    match t.load(Ordering::SeqCst) {
+                        0 if q.is_empty() => break,
+
+                        _ => {
+                            while let Some(n) = q.pop() {
+                                v[n].fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    if let Some(n) = q.force_push(i) {
+                        v[n].fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+
+                t.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+    });
+
+    for c in v {
+        assert!(c.load(Ordering::SeqCst) <= THREADS);
+    }
+}
+
+#[test]
 fn linearizable() {
     #[cfg(miri)]
     const COUNT: usize = 100;
