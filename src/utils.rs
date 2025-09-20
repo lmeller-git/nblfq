@@ -29,6 +29,7 @@ pub(crate) fn components_from_tagged<T>(ptr: u64) -> (u64, *const T) {
     (count, sign_extend(raw_ptr) as *const T)
 }
 
+#[cfg(feature = "tagged_ptr")]
 fn sign_extend(ptr: u64) -> u64 {
     if ptr & (1u64 << 47) != 0 {
         ptr | (!((1u64 << 48) - 1))

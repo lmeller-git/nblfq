@@ -64,7 +64,13 @@ fn len_empty_full() {
 
 #[test]
 fn len() {
+    #[cfg(miri)]
+    const COUNT: usize = 30;
+    #[cfg(not(miri))]
     const COUNT: usize = 25_000;
+    #[cfg(miri)]
+    const CAP: usize = 40;
+    #[cfg(not(miri))]
     const CAP: usize = 1000;
     const ITERS: usize = CAP / 20;
 
@@ -122,6 +128,9 @@ fn len() {
 
 #[test]
 fn spsc() {
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
     const COUNT: usize = 100_000;
 
     let q = HeapBackedQueue::new(3);
@@ -149,6 +158,9 @@ fn spsc() {
 
 #[test]
 fn mpsc() {
+    #[cfg(miri)]
+    const COUNT: usize = 10;
+    #[cfg(not(miri))]
     const COUNT: usize = 10_000;
     const THREADS: usize = 4;
 
@@ -182,8 +194,12 @@ fn mpsc() {
 
 #[test]
 fn mpmc() {
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
     const COUNT: usize = 25_000;
     const THREADS: usize = 4;
+
     let q: HeapBackedQueue<usize> = HeapBackedQueue::new(3);
     let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
 
@@ -216,6 +232,9 @@ fn mpmc() {
 
 #[test]
 fn linearizable() {
+    #[cfg(miri)]
+    const COUNT: usize = 100;
+    #[cfg(not(miri))]
     const COUNT: usize = 25_000;
     const THREADS: usize = 4;
 
@@ -239,4 +258,56 @@ fn linearizable() {
             });
         }
     })
+}
+
+#[test]
+fn drops() {
+    let runs: usize = if cfg!(miri) { 3 } else { 100 };
+    let steps: usize = if cfg!(miri) { 50 } else { 10_000 };
+    let additional: usize = if cfg!(miri) { 10 } else { 50 };
+
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+    #[derive(Debug, PartialEq)]
+    struct DropCounter;
+
+    impl Drop for DropCounter {
+        fn drop(&mut self) {
+            DROPS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let mut rng = fastrand::Rng::new();
+
+    for _ in 0..runs {
+        let steps = rng.usize(0..steps);
+        let additional = rng.usize(0..additional);
+
+        DROPS.store(0, Ordering::SeqCst);
+        let q = HeapBackedQueue::new(50);
+
+        scope(|scope| {
+            scope.spawn(|| {
+                for _ in 0..steps {
+                    while q.pop().is_none() {}
+                }
+            });
+
+            scope.spawn(|| {
+                for _ in 0..steps {
+                    while q.push(DropCounter).is_err() {
+                        DROPS.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+            });
+        });
+
+        for _ in 0..additional {
+            q.push(DropCounter).unwrap();
+        }
+
+        assert_eq!(DROPS.load(Ordering::SeqCst), steps);
+        drop(q);
+        assert_eq!(DROPS.load(Ordering::SeqCst), steps + additional);
+    }
 }

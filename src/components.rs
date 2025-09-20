@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use ::core::{
     array,
     sync::atomic::{AtomicU64, Ordering},
@@ -9,6 +11,8 @@ use core::marker::PhantomData;
 
 #[cfg(feature = "tagged_ptr")]
 use crate::utils::{components_as_tagged, components_from_tagged};
+#[cfg(not(feature = "tagged_ptr"))]
+use core::sync::atomic::AtomicPtr;
 
 cfg_if! {
     if #[cfg(feature = "tagged_ptr")] {

@@ -248,26 +248,6 @@ impl<T> HeapBackedQueue<T> {
             .map(|item| unsafe { *Box::from_raw(item as *mut T) })
     }
 
-    /// Attempts to push an item into the queue.
-    /// Returns the item as an error if the queue is full.
-    /// Items are internally stored as ptrs, storing a 'static ref is cheaper than an owned value/
-    pub fn push_ref(&self, item: &'static T) -> Result<(), &'static T> {
-        let item = item as *const T;
-        self.0.push(item).map_err(|item| unsafe { &*item })
-    }
-
-    /// Pushes an item into the queue, overwriting the last item if it is full
-    /// Items are internally stored as ptrs, storing a 'static ref is cheaper than an owned value/
-    pub fn force_push_ref(&self, item: &'static T) -> Option<&'static T> {
-        let item = item as *const T;
-        self.0.force_push(item).map(|item| unsafe { &*item })
-    }
-
-    /// pop the last item as 'static ref, if an item is contained
-    pub fn pop_ref(&self) -> Option<&'static T> {
-        self.0.pop().map(|item| unsafe { &*item })
-    }
-
     /// Returns the total capacity of the underlying buffer.
     pub fn capacity(&self) -> usize {
         self.0.capacity()
@@ -299,19 +279,19 @@ impl<const N: usize, T> HeaplessQueue<N, T> {
 
     /// Attempts to push an item into the queue.
     /// Returns the item as an error if the queue is full.
-    pub fn push_ref(&self, item: &'static T) -> Result<(), &'static T> {
+    pub fn push(&self, item: &'static T) -> Result<(), &'static T> {
         let item = item as *const T;
         self.0.push(item).map_err(|item| unsafe { &*item })
     }
 
     /// Pushes an item into the queue, overwriting the last item if it is full
-    pub fn force_push_ref(&self, item: &'static T) -> Option<&'static T> {
+    pub fn force_push(&self, item: &'static T) -> Option<&'static T> {
         let item = item as *const T;
         self.0.force_push(item).map(|item| unsafe { &*item })
     }
 
     /// pop the last item, if an item is contained
-    pub fn pop_ref(&self) -> Option<&'static T> {
+    pub fn pop(&self) -> Option<&'static T> {
         self.0.pop().map(|item| unsafe { &*item })
     }
 
@@ -339,33 +319,6 @@ impl<const N: usize, T> HeaplessQueue<N, T> {
     }
 }
 
-#[cfg(feature = "alloc")]
-impl<const N: usize, T> HeaplessQueue<N, T> {
-    /// Attempts to push an item into the queue.
-    /// Returns the item as an error if the queue is full.
-    pub fn push(&self, item: T) -> Result<(), T> {
-        let item = Box::into_raw(Box::new(item));
-        self.0
-            .push(item)
-            .map_err(|item| unsafe { *Box::from_raw(item as *mut T) })
-    }
-
-    /// Pushes an item into the queue, overwriting the last item if it is full
-    pub fn force_push(&self, item: T) -> Option<T> {
-        let item = Box::into_raw(Box::new(item));
-        self.0
-            .force_push(item)
-            .map(|item| unsafe { *Box::from_raw(item as *mut T) })
-    }
-
-    /// pop the last item, if an item is contained
-    pub fn pop(&self) -> Option<T> {
-        self.0
-            .pop()
-            .map(|item| unsafe { *Box::from_raw(item as *mut T) })
-    }
-}
-
 impl<const N: usize, T> Default for HeaplessQueue<N, T> {
     fn default() -> Self {
         Self::new()
@@ -381,5 +334,13 @@ impl<T> Debug for HeapBackedQueue<T> {
 impl<const N: usize, T> Debug for HeaplessQueue<N, T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.pad("HeaplessQueue { ... }")
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T> Drop for HeapBackedQueue<T> {
+    fn drop(&mut self) {
+        // drop all leaked boxes
+        while self.pop().is_some() {}
     }
 }

@@ -6,23 +6,23 @@ use crate::HeaplessQueue;
 #[test]
 fn smoke() {
     let q: HeaplessQueue<1, i32> = HeaplessQueue::new();
-    q.push_ref(&7).unwrap();
-    assert_eq!(q.pop_ref(), Some(&7));
-    q.push_ref(&8).unwrap();
-    assert_eq!(q.pop_ref(), Some(&8));
-    assert!(q.pop_ref().is_none());
+    q.push(&7).unwrap();
+    assert_eq!(q.pop(), Some(&7));
+    q.push(&8).unwrap();
+    assert_eq!(q.pop(), Some(&8));
+    assert!(q.pop().is_none());
 }
 
 #[test]
 fn smoke_long() {
     let q: HeaplessQueue<10, i32> = HeaplessQueue::new();
-    q.push_ref(&7).unwrap();
-    assert_eq!(q.pop_ref(), Some(&7));
-    q.push_ref(&8).unwrap();
-    q.push_ref(&9).unwrap();
-    assert_eq!(q.pop_ref(), Some(&8));
-    assert_eq!(q.pop_ref(), Some(&9));
-    assert!(q.pop_ref().is_none());
+    q.push(&7).unwrap();
+    assert_eq!(q.pop(), Some(&7));
+    q.push(&8).unwrap();
+    q.push(&9).unwrap();
+    assert_eq!(q.pop(), Some(&8));
+    assert_eq!(q.pop(), Some(&9));
+    assert!(q.pop().is_none());
 }
 
 #[test]
@@ -33,13 +33,13 @@ fn len_empty_full() {
     assert!(q.is_empty());
     assert!(!q.is_full());
 
-    q.push(()).unwrap();
+    q.push(&()).unwrap();
 
     assert_eq!(q.len(), 1);
     assert!(!q.is_empty());
     assert!(!q.is_full());
 
-    q.push(()).unwrap();
+    q.push(&()).unwrap();
 
     assert_eq!(q.len(), 2);
     assert!(!q.is_empty());
@@ -54,7 +54,13 @@ fn len_empty_full() {
 
 #[test]
 fn len() {
+    #[cfg(miri)]
+    const COUNT: usize = 30;
+    #[cfg(not(miri))]
     const COUNT: usize = 25_000;
+    #[cfg(miri)]
+    const CAP: usize = 40;
+    #[cfg(not(miri))]
     const CAP: usize = 1000;
     const ITERS: usize = CAP / 20;
 
@@ -64,6 +70,7 @@ fn len() {
 
     for _ in 0..CAP / 10 {
         for i in 0..ITERS {
+            let i: &'static usize = Box::leak(Box::new(i));
             q.push(i).unwrap();
             assert_eq!(q.len(), i + 1);
         }
@@ -76,6 +83,7 @@ fn len() {
     assert_eq!(q.len(), 0);
 
     for i in 0..CAP {
+        let i: &'static usize = Box::leak(Box::new(i));
         q.push(i).unwrap();
         assert_eq!(q.len(), i + 1);
     }
@@ -90,7 +98,7 @@ fn len() {
             for i in 0..COUNT {
                 loop {
                     if let Some(x) = q.pop() {
-                        assert_eq!(x, i);
+                        assert_eq!(*x, i);
                         break;
                     }
                 }
@@ -101,6 +109,7 @@ fn len() {
 
         scope.spawn(|| {
             for i in 0..COUNT {
+                let i: &'static usize = Box::leak(Box::new(i));
                 while q.push(i).is_err() {}
                 let len = q.len();
                 assert!(len <= CAP);
@@ -112,6 +121,9 @@ fn len() {
 
 #[test]
 fn spsc() {
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
     const COUNT: usize = 100_000;
 
     let q: HeaplessQueue<3, _> = HeaplessQueue::new();
@@ -120,19 +132,19 @@ fn spsc() {
         scope.spawn(|| {
             for i in 0..COUNT {
                 loop {
-                    if let Some(x) = q.pop_ref() {
+                    if let Some(x) = q.pop() {
                         assert_eq!(*x, i);
                         break;
                     }
                 }
             }
-            assert!(q.pop_ref().is_none());
+            assert!(q.pop().is_none());
         });
 
         scope.spawn(|| {
             for i in 0..COUNT {
                 let i: &'static usize = Box::leak(Box::new(i));
-                while q.push_ref(i).is_err() {}
+                while q.push(i).is_err() {}
             }
         });
     })
@@ -140,6 +152,9 @@ fn spsc() {
 
 #[test]
 fn mpsc() {
+    #[cfg(miri)]
+    const COUNT: usize = 10;
+    #[cfg(not(miri))]
     const COUNT: usize = 10_000;
     const THREADS: usize = 4;
 
@@ -151,14 +166,14 @@ fn mpsc() {
             scope.spawn(|| {
                 for i in 0..COUNT {
                     let i: &'static usize = Box::leak(Box::new(i));
-                    while q.push_ref(i).is_err() {}
+                    while q.push(i).is_err() {}
                 }
             });
         }
         for _ in 0..THREADS {
             for _ in 0..COUNT {
                 let n = loop {
-                    if let Some(x) = q.pop_ref() {
+                    if let Some(x) = q.pop() {
                         break x;
                     }
                 };
@@ -174,6 +189,9 @@ fn mpsc() {
 
 #[test]
 fn mpmc() {
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
     const COUNT: usize = 25_000;
     const THREADS: usize = 4;
 
@@ -185,7 +203,7 @@ fn mpmc() {
             scope.spawn(|| {
                 for _ in 0..COUNT {
                     let n = loop {
-                        if let Some(x) = q.pop_ref() {
+                        if let Some(x) = q.pop() {
                             break x;
                         }
                     };
@@ -197,7 +215,7 @@ fn mpmc() {
             scope.spawn(|| {
                 for i in 0..COUNT {
                     let i: &'static usize = Box::leak(Box::new(i));
-                    while q.push_ref(i).is_err() {}
+                    while q.push(i).is_err() {}
                 }
             });
         }
@@ -210,6 +228,9 @@ fn mpmc() {
 
 #[test]
 fn linearizable() {
+    #[cfg(miri)]
+    const COUNT: usize = 100;
+    #[cfg(not(miri))]
     const COUNT: usize = 25_000;
     const THREADS: usize = 4;
 
@@ -219,15 +240,15 @@ fn linearizable() {
         for _ in 0..THREADS / 2 {
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    while q.push_ref(&0).is_err() {}
-                    q.pop_ref().unwrap();
+                    while q.push(&0).is_err() {}
+                    q.pop().unwrap();
                 }
             });
 
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    if q.force_push_ref(&0).is_none() {
-                        q.pop_ref().unwrap();
+                    if q.force_push(&0).is_none() {
+                        q.pop().unwrap();
                     }
                 }
             });
