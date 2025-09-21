@@ -1,3 +1,5 @@
+use cfg_if::cfg_if;
+
 pub(crate) fn prev(i: usize, size: usize) -> usize {
     (i + size - 1) % size
 }
@@ -10,31 +12,54 @@ pub(crate) fn comp(i: usize, u: u64, j: usize, v: u64, w_max: u64) -> bool {
     }
 }
 
-// tagged ptr 64bit:
-// |--16 bit--|----48 bit----|
-//    count   |     ptr
+cfg_if! {
+    if #[cfg(feature = "tagged_ptr")] {
+        pub(crate) use tagged_ptr::*;
+    } else if #[cfg(target_has_atomic = "128")]{
+        pub(crate) use dword::*;
+    }
+}
 
-#[cfg(feature = "tagged_ptr")]
-pub(crate) fn components_as_tagged<T>(count: u64, ptr: *const T) -> u64 {
-    debug_assert!(count <= u16::MAX as u64, "Count too large for 16-bit field");
-    let ptr_non_extended = ptr as usize as u64 & ((1u64 << 48) - 1);
-    (count << 48) | ptr_non_extended
+#[cfg(target_has_atomic = "128")]
+mod dword {
+    // dword ptr 128bit:
+    // |----64 bit----|----64 bit----|
+    //       count    |     ptr
+
+    pub(crate) fn components_as_dword<T>(count: u64, ptr: *const T) -> u128 {
+        todo!()
+    }
+
+    pub(crate) fn components_from_dword<T>(dword: u128) -> (u64, *const T) {
+        todo!()
+    }
 }
 
 #[cfg(feature = "tagged_ptr")]
-pub(crate) fn components_from_tagged<T>(ptr: u64) -> (u64, *const T) {
-    let count = ptr >> 48;
-    let ptr_mask = (1u64 << 48) - 1;
-    let raw_ptr = ptr & ptr_mask;
-    (count, sign_extend(raw_ptr) as *const T)
-}
+mod tagged_ptr {
+    // tagged ptr 64bit:
+    // |--16 bit--|----48 bit----|
+    //    count   |     ptr
 
-#[cfg(feature = "tagged_ptr")]
-fn sign_extend(ptr: u64) -> u64 {
-    if ptr & (1u64 << 47) != 0 {
-        ptr | (!((1u64 << 48) - 1))
-    } else {
-        ptr
+    pub(crate) fn components_as_tagged<T>(count: u64, ptr: *const T) -> u64 {
+        debug_assert!(count <= u16::MAX as u64, "Count too large for 16-bit field");
+        let ptr_non_extended = ptr as usize as u64 & ((1u64 << 48) - 1);
+        (count << 48) | ptr_non_extended
+    }
+
+    pub(crate) fn components_from_tagged<T>(ptr: u64) -> (u64, *const T) {
+        let count = ptr >> 48;
+        let ptr_mask = (1u64 << 48) - 1;
+        let raw_ptr = ptr & ptr_mask;
+        (count, sign_extend(raw_ptr) as *const T)
+    }
+
+    fn sign_extend(ptr: u64) -> u64 {
+        if ptr & (1u64 << 47) != 0 {
+            ptr | (!((1u64 << 48) - 1))
+        } else {
+            ptr
+        }
     }
 }
 
