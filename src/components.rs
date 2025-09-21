@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use ::core::{
     array,
     sync::atomic::{AtomicU64, Ordering},

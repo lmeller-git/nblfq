@@ -1,3 +1,8 @@
+//! Testing for nblfq queue
+//!
+//! Tests adapted from crossbeam-queue's test suite.
+//! https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue
+
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::{thread::scope, vec::Vec};
 
