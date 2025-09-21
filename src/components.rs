@@ -17,16 +17,12 @@ cfg_if! {
 }
 
 cfg_if! {
-    if #[cfg(feature = "tagged_ptr")] {
+    if #[cfg(not(feature = "no-tagged-ptr"))] {
         use tagged_ptr::*;
         pub(crate) type PtrType<T> = TaggedItemInner<T>;
-    } else if #[cfg(target_has_atomic = "128")] {
-        use dword_item::*;
-        pub(crate) type PtrType<T> = DwordItemInner<T>;
-    }
-    else {
-        use split_item::*;
-        pub(crate) type PtrType<T> = SplitItemInner<T>;
+    } else {
+        use dword_item_portable::*;
+        pub(crate) type PtrType<T> = DWordItemInner<T>;
     }
 }
 
@@ -142,7 +138,7 @@ impl<T, I: ItemInner<T>> GenericItem<T, I> {
     }
 }
 
-#[cfg(feature = "tagged_ptr")]
+#[cfg(not(feature = "no-tagged-ptr"))]
 mod tagged_ptr {
     use super::*;
     use crate::utils::{components_as_tagged, components_from_tagged};
@@ -200,11 +196,12 @@ mod tagged_ptr {
     unsafe impl<T> Sync for TaggedItemInner<T> {}
 }
 
-#[cfg(target_has_atomic = "128")]
-mod dword_item {
-    use super::*;
+#[cfg(feature = "no-tagged-ptr")]
+mod dword_item_portable {
     use crate::utils::{components_as_dword, components_from_dword};
-    use core::sync::atomic::AtomicU128;
+    use portable_atomic::AtomicU128;
+
+    use super::*;
 
     pub(crate) struct DWordItemInner<T> {
         storage: AtomicU128,
@@ -213,7 +210,7 @@ mod dword_item {
 
     impl<T> DWordItemInner<T> {
         pub(crate) fn from_components(count: u64, ptr: *const T) -> Self {
-            todo!()
+            Self::from_dword(components_as_dword(count, ptr))
         }
 
         pub(crate) fn from_dword(dword: u128) -> Self {
@@ -239,8 +236,10 @@ mod dword_item {
         ) -> Result<(u64, *const T), (u64, *const T)> {
             let old = components_as_dword(old_count, old_ptr);
             let new = components_as_dword(new_count, new_ptr);
-            // self.storage.into_inner()
-            todo!()
+            self.storage
+                .compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
+                .map(|dword| components_from_dword(dword))
+                .map_err(|dword| components_from_dword(dword))
         }
 
         fn new() -> Self {
@@ -250,44 +249,4 @@ mod dword_item {
 
     unsafe impl<T> Sync for DWordItemInner<T> {}
     unsafe impl<T> Send for DWordItemInner<T> {}
-}
-
-#[cfg(not(any(feature = "tagged_ptr", target_has_atomic = "128")))]
-mod split_item {
-    use super::*;
-    use core::sync::atomic::AtomicPtr;
-
-    pub(crate) struct SplitItemInner<T> {
-        count: AtomicU64,
-        data: AtomicPtr<T>,
-    }
-
-    impl<T> ItemInner<T> for SplitItemInner<T> {
-        const MAX_W: u64 = u64::MAX;
-        fn components(&self) -> (u64, *const T) {
-            (
-                self.count.load(Ordering::Acquire),
-                self.data.load(Ordering::Acquire),
-            )
-        }
-
-        fn cmpxchg(
-            &self,
-            old_ptr: *const T,
-            old_count: u64,
-            new_ptr: *const T,
-            new_count: u64,
-        ) -> Result<(u64, *const T), (u64, *const T)> {
-            todo!()
-        }
-
-        fn new() -> Self {
-            use core::ptr::null_mut;
-
-            Self {
-                count: AtomicU64::new(0),
-                data: AtomicPtr::new(null_mut()),
-            }
-        }
-    }
 }

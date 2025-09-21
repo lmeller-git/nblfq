@@ -25,10 +25,14 @@ jobs:
       run: rustup component add miri
 
     - name: Build test bin and run tests
-      run: cargo test
+      run: |
+        cargo test
+        cargo test --no-default-features # no_std + no_alloc
+        cargo test --no-default-features --features alloc # no_std, alloc
 
     - name: Run miri tests - heapless 
-      run: MIRIFLAGS="-Zmiri-ignore-leaks -Zmiri-permissive-provenance" cargo miri test heapless
+      run: |
+        MIRIFLAGS="-Zmiri-ignore-leaks -Zmiri-permissive-provenance" cargo miri test heapless
 
     - name: RUn miri tests - heap backed
       run: MIRIFLAGS="-Zmiri-permissive-provenance" cargo miri test arrayqueue
