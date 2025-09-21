@@ -22,6 +22,7 @@ cfg_if! {
 
 #[cfg(feature = "no-tagged-ptr")]
 mod dword {
+
     // dword ptr 128bit:
     // |----64 bit----|----64 bit----|
     //       count    |     ptr
@@ -39,6 +40,7 @@ mod dword {
 
 #[cfg(not(feature = "no-tagged-ptr"))]
 mod tagged_ptr {
+
     // tagged ptr 64bit:
     // |--16 bit--|----48 bit----|
     //    count   |     ptr

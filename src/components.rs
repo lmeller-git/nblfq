@@ -198,10 +198,9 @@ mod tagged_ptr {
 
 #[cfg(feature = "no-tagged-ptr")]
 mod dword_item_portable {
+    use super::*;
     use crate::utils::{components_as_dword, components_from_dword};
     use portable_atomic::AtomicU128;
-
-    use super::*;
 
     pub(crate) struct DWordItemInner<T> {
         storage: AtomicU128,

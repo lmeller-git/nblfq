@@ -74,12 +74,14 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
                 (prev_count, prev_ptr, (current_count, current_ptr)) =
                     (current_count, current_ptr, current_item.components());
             }
+
             if prev_ptr.is_null() && current_ptr.is_null() {
                 // empty queue
                 return None;
             }
 
             let next_count = (current_count + 1) % PtrType::<T>::MAX_W;
+
             if let Ok((_, item)) =
                 current_item.cmpxchg(current_ptr, current_count, null(), next_count)
             {
@@ -105,6 +107,7 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
                 if !prev_ptr.is_null() && current_ptr.is_null() {
                     break (prev_count, prev_ptr);
                 }
+
                 if !comp(
                     prev_idx,
                     prev_count,
@@ -123,6 +126,7 @@ impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
                 }
                 head = (head + 1) % self.buffer.len();
             };
+
             let mut new_counter = count;
             if prev_ptr.is_null() {
                 // empty list
@@ -207,11 +211,25 @@ mod heap_based {
 
     impl<T> HeapBackedQueue<T> {
         pub fn new(size: usize) -> Self {
+            assert!(size > 0, "Size of the queue must be greater than 0");
             Self(ArrayQueue::new_in(components::FixedBuf::new(size)))
         }
 
         /// Attempts to push an item into the queue.
         /// Returns the item as an error if the queue is full.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use nblfq::HeapBackedQueue;
+        ///
+        /// let q = HeapBackedQueue::new(2);
+        ///
+        /// assert_eq!(q.push(10), Ok(()));
+        /// assert_eq!(q.push(20), Ok(()));
+        /// assert_eq!(q.push(30), Err(30));
+        /// assert_eq!(q.pop(), Some(10));
+        /// ```
         pub fn push(&self, item: T) -> Result<(), T> {
             let item = Box::into_raw(Box::new(item));
             self.0
@@ -223,6 +241,19 @@ mod heap_based {
         /// This method does NOT guarantee atomicity. It simply calls pop(), until push() is succesfull.
         /// This also means that this method may spin for some time.
         /// The last popped item is returned, if the queue was full
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use nblfq::HeapBackedQueue;
+        ///
+        /// let q = HeapBackedQueue::new(2);
+        ///
+        /// assert_eq!(q.force_push(10), None);
+        /// assert_eq!(q.force_push(20), None);
+        /// assert_eq!(q.force_push(30), Some(10));
+        /// assert_eq!(q.pop(), Some(20));
+        /// ```
         pub fn force_push(&self, item: T) -> Option<T> {
             let mut popped_item = None;
             let mut container = item;
@@ -241,6 +272,18 @@ mod heap_based {
         }
 
         /// pop the last item, if an item is contained
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use nblfq::HeapBackedQueue;
+        ///
+        /// let q = HeapBackedQueue::new(1);
+        /// assert_eq!(q.push(10), Ok(()));
+        ///
+        /// assert_eq!(q.pop(), Some(10));
+        /// assert!(q.pop().is_none());
+        /// ```
         pub fn pop(&self) -> Option<T> {
             self.0
                 .pop()
@@ -270,11 +313,13 @@ mod heap_based {
             self.0.is_full()
         }
     }
+
     impl<T> Debug for HeapBackedQueue<T> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.pad("HeapBackedQueue { ... }")
         }
     }
+
     impl<T> Drop for HeapBackedQueue<T> {
         fn drop(&mut self) {
             // drop all leaked boxes
@@ -290,11 +335,25 @@ mod heapless {
 
     impl<const N: usize, T> HeaplessQueue<N, T> {
         pub fn new() -> Self {
+            assert!(N > 0, "Size of the queue must be greater than 0");
             Self(ArrayQueue::new_in(components::HeaplessBuf::new()))
         }
 
         /// Attempts to push an item into the queue.
         /// Returns the item as an error if the queue is full.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use nblfq::HeaplessQueue;
+        ///
+        /// let q: HeaplessQueue<2, _> = HeaplessQueue::new();
+        ///
+        /// assert_eq!(q.push(&10), Ok(()));
+        /// assert_eq!(q.push(&20), Ok(()));
+        /// assert_eq!(q.push(&30), Err(&30));
+        /// assert_eq!(q.pop(), Some(&10));
+        /// ```
         pub fn push(&self, item: &'static T) -> Result<(), &'static T> {
             let item = item as *const T;
             self.0.push(item).map_err(|item| unsafe { &*item })
@@ -304,6 +363,19 @@ mod heapless {
         /// This method does NOT guarantee atomicity. It simply calls pop(), until push() is succesfull.
         /// This also means that this method may spin for some time.
         /// The last popped item is returned, if the queue was full
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use nblfq::HeaplessQueue;
+        ///
+        /// let q: HeaplessQueue<2, _> = HeaplessQueue::new();
+        ///
+        /// assert_eq!(q.force_push(&10), None);
+        /// assert_eq!(q.force_push(&20), None);
+        /// assert_eq!(q.force_push(&30), Some(&10));
+        /// assert_eq!(q.pop(), Some(&20));
+        /// ```
         pub fn force_push(&self, item: &'static T) -> Option<&'static T> {
             let mut popped_item = None;
             let mut backoff = 1;
@@ -320,6 +392,18 @@ mod heapless {
         }
 
         /// pop the last item, if an item is contained
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// use nblfq::HeaplessQueue;
+        ///
+        /// let q: HeaplessQueue<1, _> = HeaplessQueue::new();
+        /// assert_eq!(q.push(&10), Ok(()));
+        ///
+        /// assert_eq!(q.pop(), Some(&10));
+        /// assert!(q.pop().is_none());
+        /// ```
         pub fn pop(&self) -> Option<&'static T> {
             self.0.pop().map(|item| unsafe { &*item })
         }
@@ -350,6 +434,7 @@ mod heapless {
 
     impl<const N: usize, T> Default for HeaplessQueue<N, T> {
         fn default() -> Self {
+            assert!(N > 0, "Size of the queue must be greater than 0");
             Self::new()
         }
     }
