@@ -43,7 +43,7 @@ This repository provides two queue implementations:
 
 ## Platform Support
 
-Multiple storage types are available, dependant on platform:
+Multiple storage types are available, dependent on platform:
 
 - **Tagged ptr** - 64-bit platforms with 48-bit virtual addresses
 
