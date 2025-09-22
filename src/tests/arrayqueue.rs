@@ -363,3 +363,14 @@ fn drops() {
         assert_eq!(DROPS.load(Ordering::SeqCst), steps + additional);
     }
 }
+
+#[test]
+fn into_iter() {
+    let q = HeapBackedQueue::new(100);
+    for i in 0..100 {
+        q.push(i).unwrap();
+    }
+    for (i, j) in q.into_iter().enumerate() {
+        assert_eq!(i, j);
+    }
+}

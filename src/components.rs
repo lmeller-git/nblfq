@@ -31,7 +31,7 @@ pub(super) trait Buffer<T> {
     fn inner(&self) -> &[Item<T>];
 }
 
-pub(crate) trait ItemInner<T>: Send + Sync {
+pub(crate) trait ItemInner<T> {
     const MAX_W: u64;
     /// returns (count, ptr)
     fn components(&self) -> (u64, *const T);
@@ -144,7 +144,7 @@ mod tagged_ptr {
     pub(crate) struct TaggedItemInner<T> {
         // the pointer part takes up the first 48 bits, count the last 16
         ptr: AtomicU64,
-        _data: PhantomData<T>,
+        _data: PhantomData<*const T>,
     }
 
     #[allow(unused)]
@@ -189,9 +189,6 @@ mod tagged_ptr {
                 .map_err(|p| components_from_tagged(p))
         }
     }
-
-    unsafe impl<T> Send for TaggedItemInner<T> {}
-    unsafe impl<T> Sync for TaggedItemInner<T> {}
 }
 
 #[cfg(feature = "no-tagged-ptr")]
@@ -202,7 +199,7 @@ mod dword_item_portable {
 
     pub(crate) struct DWordItemInner<T> {
         storage: AtomicU128,
-        _data: PhantomData<T>,
+        _data: PhantomData<*const T>,
     }
 
     impl<T> DWordItemInner<T> {
@@ -243,7 +240,4 @@ mod dword_item_portable {
             Self::from_dword(0)
         }
     }
-
-    unsafe impl<T> Sync for DWordItemInner<T> {}
-    unsafe impl<T> Send for DWordItemInner<T> {}
 }

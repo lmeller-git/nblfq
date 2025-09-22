@@ -1,5 +1,6 @@
 use core::{
     fmt::Debug,
+    iter,
     marker::PhantomData,
     ptr::null,
     sync::atomic::{AtomicUsize, Ordering},
@@ -36,7 +37,7 @@ pub(crate) struct ArrayQueue<T, B: components::Buffer<T>> {
     ///
     /// This value may be stale and must be checked for critical operations.
     tail: AtomicUsize,
-    _data: PhantomData<T>,
+    _data: PhantomData<*const T>,
 }
 
 impl<T, B: components::Buffer<T>> ArrayQueue<T, B> {
@@ -326,6 +327,20 @@ mod heap_based {
             while self.pop().is_some() {}
         }
     }
+
+    impl<T> IntoIterator for HeapBackedQueue<T> {
+        type Item = T;
+        type IntoIter = impl Iterator<Item = Self::Item>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            iter::from_fn(move || self.pop())
+        }
+    }
+
+    /// Safety: HeapBackedQueue sends owned T's between threads.
+    /// It is only safe to do so, if T is Send
+    unsafe impl<T: Send> Sync for HeapBackedQueue<T> {}
+    unsafe impl<T: Send> Send for HeapBackedQueue<T> {}
 }
 
 mod heapless {
@@ -444,4 +459,18 @@ mod heapless {
             f.pad("HeaplessQueue { ... }")
         }
     }
+
+    impl<const N: usize, T: 'static> IntoIterator for HeaplessQueue<N, T> {
+        type Item = &'static T;
+        type IntoIter = impl Iterator<Item = Self::Item>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            iter::from_fn(move || self.pop())
+        }
+    }
+
+    /// Safety: HeaplessQueue sends static ref T's between threads.
+    /// It is only safe to do so if T is Sync
+    unsafe impl<const N: usize, T: Sync> Sync for HeaplessQueue<N, T> {}
+    unsafe impl<const N: usize, T: Sync> Send for HeaplessQueue<N, T> {}
 }

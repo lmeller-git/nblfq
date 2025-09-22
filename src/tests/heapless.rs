@@ -308,3 +308,16 @@ fn linearizable() {
         }
     })
 }
+
+#[test]
+fn into_iter() {
+    let q: HeaplessQueue<100, _> = HeaplessQueue::new();
+
+    for i in 0..100 {
+        let i: &'static _ = Box::leak(Box::new(i));
+        q.push(i).unwrap();
+    }
+    for (i, j) in q.into_iter().enumerate() {
+        assert_eq!(i, *j);
+    }
+}
