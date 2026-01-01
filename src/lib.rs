@@ -11,7 +11,6 @@ pub mod array;
 mod core;
 #[cfg(feature = "alloc")]
 pub mod owned;
-pub mod pool;
 #[cfg(test)]
 mod tests;
 mod utils;
