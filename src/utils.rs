@@ -36,17 +36,28 @@ cfg_has_atomic_128! {
 // |--16 bit--|----48 bit----|
 //    count   |     ptr
 #[allow(dead_code)]
-pub(crate) fn components_as_tagged<T>(count: u64, ptr: *const T) -> u64 {
+pub(crate) fn components_as_num(count: u64, state: u64) -> u64 {
     debug_assert!(count <= u16::MAX as u64, "Count too large for 16-bit field");
-    let ptr_non_extended = ptr as u64 & ((1u64 << 48) - 1);
+    let ptr_non_extended = state as u64 & ((1u64 << 48) - 1);
     (count << 48) | ptr_non_extended
 }
 
 #[allow(dead_code)]
-pub(crate) fn components_from_tagged<T>(ptr: u64) -> (u64, *const T) {
-    let count = ptr >> 48;
+pub(crate) fn components_from_num(state: u64) -> (u64, u64) {
+    let count = state >> 48;
     let ptr_mask = (1u64 << 48) - 1;
-    let raw_ptr = ptr & ptr_mask;
+    let raw_ptr = state & ptr_mask;
+    (count, raw_ptr)
+}
+
+#[allow(dead_code)]
+pub(crate) fn components_as_tagged<T>(count: u64, ptr: *const T) -> u64 {
+    components_as_num(count, ptr as u64)
+}
+
+#[allow(dead_code)]
+pub(crate) fn components_from_tagged<T>(ptr: u64) -> (u64, *const T) {
+    let (count, raw_ptr) = components_from_num(ptr);
     (count, sign_extend(raw_ptr) as *const T)
 }
 

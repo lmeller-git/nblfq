@@ -195,15 +195,15 @@ mod item_slot {
         mpmc(q);
     }
 
-    // #[test]
-    // fn mpmc_ring_buffer_impl() {
-    //     let q: QueueCore<BoxedBuffer<OwnedSlot<_>>> = QueueCore::new_in(BoxedBuffer::new(3));
-    //     mpmc_ring_buffer(q);
-    // }
+    #[test]
+    fn mpmc_ring_buffer_impl() {
+        let q: QueueCore<BoxedBuffer<OwnedSlot<_>>> = QueueCore::new_in(BoxedBuffer::new(3));
+        mpmc_ring_buffer(q);
+    }
 
-    // #[test]
-    // fn linearizable_impl() {
-    //     let q: QueueCore<BoxedBuffer<OwnedSlot<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
-    //     linearizable(q);
-    // }
+    #[test]
+    fn linearizable_impl() {
+        let q: QueueCore<BoxedBuffer<OwnedSlot<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
+        linearizable(q);
+    }
 }

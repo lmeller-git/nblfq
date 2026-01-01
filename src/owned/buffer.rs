@@ -1,28 +1,24 @@
 use alloc::boxed::Box;
 
-use crate::{buffer::Buffer, core::slot::Slot};
+use crate::buffer::Buffer;
 
-pub(crate) struct BoxedBuffer<S: Slot> {
+pub(crate) struct BoxedBuffer<S> {
     inner: Box<[S]>,
 }
 
-impl<S: Slot> BoxedBuffer<S> {
+impl<S: Default> BoxedBuffer<S> {
     pub(crate) fn new(size: usize) -> Self {
         Self {
-            inner: (0..size).map(|_| S::new()).collect(),
+            inner: (0..size).map(|_| S::default()).collect(),
         }
     }
 }
 
-impl<S: Slot> Buffer for BoxedBuffer<S> {
+impl<S> Buffer for BoxedBuffer<S> {
     type Slot = S;
 
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
-
     fn capacity(&self) -> usize {
-        self.len()
+        self.inner.len()
     }
 
     fn inner(&self) -> &[Self::Slot] {

@@ -14,7 +14,7 @@ Slots determine how data is stored and updated. Currently only `TaggedPtr64` and
 `nblf_queue::array::StaticQueue`:
 
 ```rust
-  use nblfq::{array::StaticQueue, slot::TaggedPtr64};
+  use nblfq_queue::{array::StaticQueue, slot::TaggedPtr64};
 
   let q: StaticQueue<10, TaggedPtr64<_>> = StaticQueue::new();
 
@@ -29,7 +29,7 @@ Slots determine how data is stored and updated. Currently only `TaggedPtr64` and
 `nblf_queue::owned::Queue`:
 
 ```rust
-  use nblfq::{owned::Queue, slot::TaggedPtr64};
+  use nblfq_queue::{owned::Queue, slot::TaggedPtr64};
 
   let q: Queue<TaggedPtr64<_>> = Queue::new(10);
 

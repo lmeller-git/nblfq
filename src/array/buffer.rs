@@ -1,25 +1,21 @@
 use core::array;
 
-use crate::{buffer::Buffer, core::slot::Slot};
+use crate::buffer::Buffer;
 
-pub(crate) struct ArrayBuf<const N: usize, S: Slot> {
+pub(crate) struct ArrayBuf<const N: usize, S> {
     inner: [S; N],
 }
 
-impl<const N: usize, S: Slot> ArrayBuf<N, S> {
+impl<const N: usize, S: Default> ArrayBuf<N, S> {
     pub fn new() -> Self {
         Self {
-            inner: array::from_fn(|_| S::new()),
+            inner: array::from_fn(|_| S::default()),
         }
     }
 }
 
-impl<const N: usize, S: Slot> Buffer for ArrayBuf<N, S> {
+impl<const N: usize, S> Buffer for ArrayBuf<N, S> {
     type Slot = S;
-
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
 
     fn capacity(&self) -> usize {
         N

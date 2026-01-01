@@ -58,8 +58,9 @@ unsafe impl<T> PtrLike for &'static T {
     }
 }
 
-pub trait Slot {
+pub trait Slot: Default {
     type Item;
+    const MAX_BITS: usize;
     const MAX_W: u64;
     const EMPTY_PTR: *const Self::Item;
 
@@ -73,7 +74,6 @@ pub trait Slot {
         new_count: u64,
     ) -> Result<Option<Self::Item>, Option<Self::Item>>;
     fn is_empty(state: u64) -> bool;
-    fn is_contested(state: u64) -> bool;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -112,6 +112,7 @@ mod tagged_ptr64 {
 
     impl<T: PtrLike> Slot for TaggedPtr64<T> {
         type Item = T;
+        const MAX_BITS: usize = 48;
         const MAX_W: u64 = u16::MAX as u64 + 1;
         const EMPTY_PTR: *const Self::Item = null();
 
@@ -148,16 +149,18 @@ mod tagged_ptr64 {
         fn is_empty(ptr: u64) -> bool {
             (ptr as *const T::Item).is_null()
         }
-
-        fn is_contested(_: u64) -> bool {
-            false
-        }
     }
 
     impl<T: PtrLike> Drop for TaggedPtr64<T> {
         fn drop(&mut self) {
             let components = self.components();
             let _ptr = T::from_raw(components.state as *mut T::Item);
+        }
+    }
+
+    impl<T: PtrLike> Default for TaggedPtr64<T> {
+        fn default() -> Self {
+            Self::new()
         }
     }
 
@@ -168,20 +171,36 @@ mod tagged_ptr64 {
 #[cfg(false)]
 pub use item_slot::*;
 #[cfg(false)]
+// TODO fix this. This currently livelocks/(deadlocks?) in mpmc_ringbuffer test
 mod item_slot {
     use super::*;
-    use crate::utils::components_as_tagged;
+    use crate::utils::{components_as_num, components_from_num};
 
     use core::{
         cell::UnsafeCell,
         sync::atomic::{AtomicU64, Ordering},
     };
 
-    const RESERVED_BIT: usize = 0b01;
-    const FILLED_BIT: usize = 0b10;
-    const STATE_MASK: usize = 0b11;
+    // state transition:
+    // empty: [EMPTY_PTR | COUNT], data empty
+    // on push: cmpxchg(empty, full) ->
+    // [EMPTY_PTR -> CONTESTED | COUNT -> NEWCOUNT] ->
+    // data empty -> full ->
+    // [CONTESTED -> FULL | NEWCOUNT]
+    // full: [FULL | COUNT]
+    // on pop: cmpxchg(old, empty) ->
+    // [FULL_PTR -> CONTESTED | NEWCOUNT] ->
+    // take data
+    // [CONTESTED -> EMPTY | NEWCOUNT]
+
+    const EMPTY: usize = 0b000;
+    const RESERVED_PUSH: usize = 0b001;
+    const RESERVED_POP: usize = 0b010;
+    const FULL: usize = 0b100;
+    const STATE_MASK: usize = 0b111;
 
     // instead of a ptr we store a state bimask, which we can use to determine contested states
+    // TODO we do not need to do stuff like sign extension, as we do not use an actual ptr
     pub(crate) struct OwnedSlot<T> {
         state: AtomicU64,
         data: UnsafeCell<Option<T>>,
@@ -189,61 +208,89 @@ mod item_slot {
 
     impl<T> Slot for OwnedSlot<T> {
         type Item = T;
-        const MAX_W: u64 = u16::MAX as u64 + 1;
-        const EMPTY_PTR: *const Self::Item = null();
+        const MAX_BITS: usize = usize::MAX;
+        const MAX_W: u64 = u16::MAX as u64 + 1; // TODO the max count could be higher, as only 2 bits are used for state, but this would require new retrieval functions
+        const EMPTY_PTR: *const Self::Item = EMPTY as *const Self::Item; // TODO this is not actually a ptr to Self::Item, but a state mask
 
         fn new() -> Self {
-            todo!()
+            Self {
+                state: AtomicU64::new(EMPTY as u64),
+                data: UnsafeCell::new(None),
+            }
         }
 
         fn components(&self) -> SlotComponents {
-            todo!()
+            let (count, state) = components_from_num(self.state.load(Ordering::Acquire));
+            SlotComponents {
+                count,
+                state: state,
+            }
         }
 
         fn cmpxchg(
             &self,
             old_ptr: *const Self::Item,
             old_count: u64,
-            mut item: Option<Self::Item>,
+            item: Option<Self::Item>,
             new_count: u64,
         ) -> Result<Option<Self::Item>, Option<Self::Item>> {
-            let new_state = 0;
-            let old_state = components_as_tagged(old_count, old_ptr);
-            let new_state = components_as_tagged(new_count, new_state as *const usize);
-            let the_last_state = components_as_tagged(new_count, FILLED_BIT as *const usize);
-
-            if let Err(_) = self.state.compare_exchange(
-                old_state,
-                new_state,
-                Ordering::Release,
-                Ordering::Relaxed,
-            ) {
+            // check validity of request:
+            // a cmpxchg without payload on an empty state is not allowed,
+            // as is a cmpxchg with payload on full state,
+            // as is a cmpxchg on a RESERVED slot
+            if old_ptr as usize == RESERVED_POP
+                || old_ptr as usize == RESERVED_PUSH
+                || item.is_some() && old_ptr as usize == FULL
+                || item.is_none() && old_ptr as usize == EMPTY
+            {
                 return Err(item);
             }
 
-            if item.is_some() {
-                unsafe { &mut *self.data.get() }.replace(item.take().unwrap());
+            // if there is a pyaload, assume to be in push, else assume pop
+            let reserved = if item.is_some() {
+                RESERVED_PUSH
             } else {
-                item = unsafe { &mut *self.data.get() }.take();
+                RESERVED_POP
+            };
+
+            let contested_state = components_as_num(new_count, reserved as u64);
+            let old_sate = components_as_num(old_count, old_ptr as u64);
+
+            if self
+                .state
+                .compare_exchange(
+                    old_sate,
+                    contested_state,
+                    Ordering::Acquire,
+                    Ordering::Relaxed,
+                )
+                .is_err()
+            {
+                return Err(item);
             }
 
-            match self.state.compare_exchange(
-                new_state,
-                the_last_state,
-                Ordering::Release,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => Ok(item),
-                Err(_) => Err(item),
-            }
+            // SAFETY we just ensured via the RESERVED state that only one concurrent acces to self.data happens. Any other thread will fail the above cas.
+            let data = unsafe { &mut *self.data.get() };
+            let old_item = data.take();
+            *data = item;
+
+            // now do a second atomic store to publish the item/the empty slot
+            let new_state = if data.is_some() { FULL } else { EMPTY };
+            let final_state = components_as_num(new_count, new_state as u64);
+
+            self.state.store(final_state, Ordering::Release);
+
+            Ok(old_item)
         }
 
         fn is_empty(state: u64) -> bool {
-            state as usize & STATE_MASK == 0
+            state as usize == EMPTY
         }
+    }
 
-        fn is_contested(state: u64) -> bool {
-            state as usize & RESERVED_BIT == RESERVED_BIT
+    impl<T> Default for OwnedSlot<T> {
+        fn default() -> Self {
+            Self::new()
         }
     }
 
@@ -281,6 +328,7 @@ cfg_has_atomic_128! {
 
         impl<T: PtrLike> Slot for TaggedPtr128<T> {
             type Item = T;
+            const MAX_BITS: usize = 64; // techincally we could use more here, as the counter does not use the full 64 bits currently
             const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
             const EMPTY_PTR: *const Self::Item = null();
 
@@ -314,10 +362,6 @@ cfg_has_atomic_128! {
             fn is_empty(ptr: u64) -> bool {
                 (ptr as *const T::Item).is_null()
             }
-
-            fn is_contested(_: u64) -> bool {
-                false
-            }
         }
 
 
@@ -325,6 +369,12 @@ cfg_has_atomic_128! {
             fn drop(&mut self) {
                 let components = self.components();
                 let _ptr = T::from_raw(components.state as *mut T::Item);
+            }
+        }
+
+        impl<T: PtrLike> Default for TaggedPtr128 {
+            fn default() -> Self {
+                Self::new()
             }
         }
 

@@ -137,14 +137,18 @@ impl<B: Buffer> QueueCore<B> {
     }
 }
 
-impl<B: Buffer> MPMCQueue for QueueCore<B> {
+impl<B> MPMCQueue for QueueCore<B>
+where
+    B: Buffer,
+    B::Slot: Slot,
+{
     type Item = <B::Slot as Slot>::Item;
 
     fn push(&self, mut item: Self::Item) -> Result<(), Self::Item> {
         let mut head = self.head.load(Ordering::Acquire);
         loop {
             let components = loop {
-                let prev_idx = prev(head, self.buffer.len());
+                let prev_idx = prev(head, self.buffer.capacity());
                 let current_item = self
                     .buffer
                     .inner()
@@ -184,7 +188,7 @@ impl<B: Buffer> MPMCQueue for QueueCore<B> {
                         return Err(item);
                     }
                 }
-                head = (head + 1) % self.buffer.len();
+                head = (head + 1) % self.buffer.capacity();
             };
 
             let mut new_counter = components.count;
@@ -208,7 +212,7 @@ impl<B: Buffer> MPMCQueue for QueueCore<B> {
                 item
             } else {
                 self.head
-                    .store((head + 1) % self.buffer.len(), Ordering::Release);
+                    .store((head + 1) % self.buffer.capacity(), Ordering::Release);
                 return Ok(());
             };
         }
@@ -217,7 +221,7 @@ impl<B: Buffer> MPMCQueue for QueueCore<B> {
     fn pop(&self) -> Option<Self::Item> {
         loop {
             let mut tail = self.tail.load(Ordering::Acquire);
-            let mut prev_idx = prev(tail, self.buffer.len());
+            let mut prev_idx = prev(tail, self.buffer.capacity());
             let prev_item = self.buffer.inner().get(prev_idx)?;
             let mut current_item = self.buffer.inner().get(tail)?;
             let mut prev_components = prev_item.components();
@@ -230,16 +234,15 @@ impl<B: Buffer> MPMCQueue for QueueCore<B> {
                 current_components.count,
                 B::Slot::MAX_W,
             ) {
-                tail = (tail + 1) % self.buffer.len();
-                prev_idx = prev(tail, self.buffer.len());
+                tail = (tail + 1) % self.buffer.capacity();
+                prev_idx = prev(tail, self.buffer.capacity());
                 current_item = self.buffer.inner().get(tail)?;
                 (prev_components, current_components) =
                     (current_components, current_item.components());
             }
 
-            if (B::Slot::is_empty(prev_components.state)
-                && B::Slot::is_empty(current_components.state))
-                || B::Slot::is_contested(current_components.state)
+            if B::Slot::is_empty(prev_components.state)
+                && B::Slot::is_empty(current_components.state)
             {
                 // empty queue
                 return None;
@@ -254,8 +257,9 @@ impl<B: Buffer> MPMCQueue for QueueCore<B> {
                 next_count,
             ) {
                 self.tail
-                    .store((tail + 1) % self.buffer.len(), Ordering::Release);
-                return Some(item.expect("We popped an empty item from the queue. This is a Bug."));
+                    .store((tail + 1) % self.buffer.capacity(), Ordering::Release);
+                debug_assert!(item.is_some(), "we popped an empty item from the queue");
+                return item;
             }
         }
     }
@@ -294,4 +298,10 @@ impl<B: Buffer> MPMCQueue for QueueCore<B> {
     }
 }
 
-impl<B: Buffer> ForcePushQueue for QueueCore<B> where <B::Slot as Slot>::Item: PtrLike {}
+impl<B> ForcePushQueue for QueueCore<B>
+where
+    B: Buffer,
+    B::Slot: Slot,
+    <B::Slot as Slot>::Item: PtrLike,
+{
+}
