@@ -372,7 +372,7 @@ cfg_has_atomic_128! {
             }
         }
 
-        impl<T: PtrLike> Default for TaggedPtr128 {
+        impl<T: PtrLike> Default for TaggedPtr128<T> {
             fn default() -> Self {
                 Self::new()
             }
