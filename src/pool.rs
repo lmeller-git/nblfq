@@ -1,11 +1,11 @@
 use core::{
     cell::UnsafeCell,
     marker::PhantomData,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering, fence},
 };
 
 use crate::{
-    MPMCQueue,
+    ForcePushQueue, MPMCQueue,
     array::{StaticQueue, buffer::ArrayBuf},
     buffer::Buffer,
     slot::{PtrLike, TaggedPtr64},
@@ -45,17 +45,25 @@ struct Pool<T, DataBuf, IndexBuf> {
     _phantom: PhantomData<T>,
 }
 
-impl<T, DataBuf, IndexBuf> Pool<T, DataBuf, IndexBuf>
+impl<T, DataBuf, IndexBuf, I> Pool<T, DataBuf, IndexBuf>
 where
-    IndexBuf: Buffer,
+    IndexBuf: Buffer<Slot = UnsafeCell<Option<I>>>,
+    I: Idx,
 {
     fn new(data_buf: DataBuf, idx_buf: IndexBuf) -> Self {
+        let cap = idx_buf.capacity();
+        let stack = IndexStack {
+            next_free: AtomicUsize::new(cap),
+            index_list: idx_buf,
+        };
+        let arr = stack.index_list.inner();
+        for i in 0..cap {
+            let cell = unsafe { &mut *arr.get(i).unwrap().get() };
+            cell.replace(I::from_usize(i));
+        }
         Self {
             data: data_buf,
-            free_slots: IndexStack {
-                next_free: AtomicUsize::new(idx_buf.capacity()),
-                index_list: idx_buf,
-            },
+            free_slots: stack,
             _phantom: PhantomData,
         }
     }
@@ -108,7 +116,7 @@ where
 
 struct IndexStack<B> {
     index_list: B,
-    next_free: AtomicUsize, // next_free + 1 is the largest idx in index_list containing a slot
+    next_free: AtomicUsize, // next_free - 1 is the largest idx in index_list containing a slot
 }
 
 impl<B: Buffer, I> IndexStack<B>
@@ -132,7 +140,7 @@ where
                     let slot = self
                         .index_list
                         .inner()
-                        .get(head + 1)
+                        .get(head - 1)
                         .expect("popped invalid head from stack. This is a Bug");
                     let cell = unsafe { &mut *slot.get() };
                     return cell.take();
@@ -144,6 +152,7 @@ where
 
     fn push(&self, idx: usize) {
         let current_head = self.next_free.fetch_add(1, Ordering::AcqRel);
+        debug_assert!(current_head < self.index_list.capacity());
         let slot = self
             .index_list
             .inner()
@@ -173,7 +182,7 @@ struct ItemHandle<T, I> {
     _phantom: PhantomData<T>,
 }
 
-impl<T, I: Idx> ItemHandle<T, I> {
+impl<T, I> ItemHandle<T, I> {
     fn new(idx: I) -> Self {
         Self {
             idx,
@@ -193,6 +202,12 @@ unsafe impl<T, I: Idx> PtrLike for ItemHandle<T, I> {
     }
 }
 
+impl<T, I: Default> Default for ItemHandle<T, I> {
+    fn default() -> Self {
+        Self::new(I::default())
+    }
+}
+
 // these should be autoderived anyways
 // unsafe impl<T, I> Send for ItemHandle<T, I> where I: Send {}
 // unsafe impl<T, I> Sync for ItemHandle<T, I> where I: Sync {}
@@ -202,9 +217,10 @@ struct Pooled<T, Q, DataBuf, IndexBuf> {
     pool: Pool<T, DataBuf, IndexBuf>,
 }
 
-impl<T, Q, DataBuf, IndexBuf> Pooled<T, Q, DataBuf, IndexBuf>
+impl<T, Q, DataBuf, IndexBuf, I> Pooled<T, Q, DataBuf, IndexBuf>
 where
-    IndexBuf: Buffer,
+    IndexBuf: Buffer<Slot = UnsafeCell<Option<I>>>,
+    I: Idx,
 {
     fn new_from(queue: Q, data_buf: DataBuf, idx_buf: IndexBuf) -> Self {
         Self {
@@ -225,8 +241,10 @@ where
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
         let idx = self.pool.allocate(item)?;
+        fence(Ordering::Release);
         let handle = ItemHandle::new(idx);
         self.q.push(handle).map_err(|handle| {
+            fence(Ordering::Acquire);
             self.pool
                 .deallocate(I::as_usize(handle.idx))
                 .expect("Wrong index handed to Pool::dellocate. This is a bug.")
@@ -235,6 +253,7 @@ where
 
     fn pop(&self) -> Option<Self::Item> {
         let handle = self.q.pop()?;
+        fence(Ordering::Acquire);
         self.pool.deallocate(I::as_usize(handle.idx))
     }
 
@@ -247,6 +266,15 @@ where
     }
 }
 
+impl<T, Q, DataBuf, IndexBuf, I> ForcePushQueue for Pooled<T, Q, DataBuf, IndexBuf>
+where
+    Q: MPMCQueue<Item = ItemHandle<T, I>>,
+    I: Idx,
+    DataBuf: Buffer<Slot = UnsafeCell<Option<T>>>,
+    IndexBuf: Buffer<Slot = UnsafeCell<Option<I>>>,
+{
+}
+
 fn foo() {
     let q: Pooled<
         usize,
@@ -257,18 +285,57 @@ fn foo() {
     assert!(q.push(5).is_ok());
     assert_eq!(q.pop().unwrap(), 5);
 
-    let q2: StaticPooledQueue<usize, 10> = StaticPooledQueue::new();
+    let q2: StaticPooledQueue_<usize, 10> = StaticPooledQueue_::new();
+    q2.push(5).unwrap();
+    q2.pop();
 }
 
-pub type StaticPooledQueue<T, const N: usize> = Pooled<
+type StaticPooledQueue_<T, const N: usize> = Pooled<
     T,
-    StaticQueue<N, TaggedPtr64<ItemHandle<usize, u32>>>,
+    StaticQueue<N, TaggedPtr64<ItemHandle<T, u32>>>,
     ArrayBuf<N, UnsafeCell<Option<T>>>,
     ArrayBuf<N, UnsafeCell<Option<u32>>>,
 >;
 
-impl<T, const N: usize> StaticPooledQueue<T, N> {
+impl<T, const N: usize> StaticPooledQueue_<T, N> {
     pub fn new() -> Self {
         Self::new_from(StaticQueue::new(), ArrayBuf::new(), ArrayBuf::new())
+    }
+}
+
+pub struct StaticPooledQueue<T, const N: usize>(StaticPooledQueue_<T, N>);
+
+impl<T, const N: usize> StaticPooledQueue<T, N> {
+    pub fn new() -> Self {
+        Self(StaticPooledQueue_::new_from(
+            StaticQueue::new(),
+            ArrayBuf::new(),
+            ArrayBuf::new(),
+        ))
+    }
+}
+
+impl<T, const N: usize> MPMCQueue for StaticPooledQueue<T, N> {
+    type Item = T;
+    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+        self.0.push(item)
+    }
+
+    fn pop(&self) -> Option<Self::Item> {
+        self.0.pop()
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+}
+
+impl<T, const N: usize> ForcePushQueue for StaticPooledQueue<T, N> {
+    fn force_push(&self, mut item: Self::Item) -> Option<Self::Item> {
+        self.0.force_push(item)
     }
 }

@@ -207,3 +207,70 @@ mod item_slot {
         linearizable(q);
     }
 }
+
+// TODO fix pool
+// currently it fails lineraizable + len -> complete failure
+#[cfg(false)]
+mod pool {
+    use super::*;
+    use crate::pool::StaticPooledQueue;
+
+    #[test]
+    fn smoke_impl() {
+        let q: StaticPooledQueue<_, 2> = StaticPooledQueue::new();
+        smoke(q);
+    }
+
+    #[test]
+    fn smoke_long_impl() {
+        let q: StaticPooledQueue<_, 10> = StaticPooledQueue::new();
+        smoke_long(q);
+    }
+
+    #[test]
+    fn len_empty_full_impl() {
+        let q: StaticPooledQueue<_, 2> = StaticPooledQueue::new();
+        len_empty_full(q);
+    }
+
+    #[test]
+    fn len_impl() {
+        #[cfg(miri)]
+        const CAP: usize = 40;
+        #[cfg(not(miri))]
+        const CAP: usize = 1000;
+
+        let q: StaticPooledQueue<_, CAP> = StaticPooledQueue::new();
+        len(q);
+    }
+
+    #[test]
+    fn spsc_impl() {
+        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        spsc(q);
+    }
+
+    #[test]
+    fn mpsc_impl() {
+        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        mpsc(q);
+    }
+
+    #[test]
+    fn mpmc_impl() {
+        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        mpmc(q);
+    }
+
+    #[test]
+    fn mpmc_ring_buffer_impl() {
+        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        mpmc_ring_buffer(q);
+    }
+
+    #[test]
+    fn linearizable_impl() {
+        let q: StaticPooledQueue<_, 4> = StaticPooledQueue::new();
+        linearizable(q);
+    }
+}
