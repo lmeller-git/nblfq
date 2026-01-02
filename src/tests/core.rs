@@ -204,6 +204,7 @@ mod item_slot {
     }
 }
 
+#[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
 mod pool {
     use super::*;
     use crate::pool::StaticPooledQueue;

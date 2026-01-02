@@ -11,6 +11,7 @@ pub mod array;
 mod core;
 #[cfg(feature = "alloc")]
 pub mod owned;
+#[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
 pub mod pool;
 #[cfg(test)]
 mod tests;
