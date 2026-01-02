@@ -208,24 +208,6 @@ where
 {
 }
 
-#[allow(dead_code)]
-fn foo() {
-    let q: Pooled<
-        usize,
-        StaticQueue<10, TaggedPtr64<ItemHandle<usize>>>,
-        ArrayBuf<10, UnsafeCell<Option<usize>>>,
-        StaticQueue<10, TaggedPtr64<IndexStorage>>,
-    > = Pooled::new_from(StaticQueue::new(), ArrayBuf::new(), StaticQueue::new());
-    assert!(q.push(5).is_ok());
-    assert_eq!(q.pop().unwrap(), 5);
-
-    let q2: StaticPooledQueue_<usize, 10> = StaticPooledQueue_::new();
-    q2.push(5).unwrap();
-    q2.pop();
-    let q3: StaticPooledQueue<_, 10> = StaticPooledQueue::new();
-    q3.force_push(5);
-}
-
 type StaticPooledQueue_<T, const N: usize> = Pooled<
     T,
     StaticQueue<N, TaggedPtr64<ItemHandle<T>>>,
@@ -243,11 +225,7 @@ pub struct StaticPooledQueue<T, const N: usize>(StaticPooledQueue_<T, N>);
 
 impl<T, const N: usize> StaticPooledQueue<T, N> {
     pub fn new() -> Self {
-        Self(StaticPooledQueue_::new_from(
-            StaticQueue::new(),
-            ArrayBuf::new(),
-            StaticQueue::new(),
-        ))
+        Self(StaticPooledQueue_::new())
     }
 }
 
