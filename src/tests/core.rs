@@ -4,10 +4,9 @@ use crate::tests::test_library::{
     len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
 };
 
-#[cfg(false)]
 #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
 mod tagged_ptr64 {
-    use crate::slot::TaggedPtr64;
+    use crate::{owned::buffer::BoxedBuffer, queue::QueueCore, slot::TaggedPtr64};
 
     use super::*;
 
@@ -73,7 +72,7 @@ mod tagged_ptr64 {
 
 cfg_has_atomic_128! {
     mod tagged_ptr128 {
-        use crate::slot::TaggedPtr128;
+        use crate::{owned::BoxedBuffer, core::QueueCore ,slot::TaggedPtr128};
 
         use super::*;
 

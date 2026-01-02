@@ -378,7 +378,7 @@ cfg_has_atomic_128! {
                     }
                     Err(_) => {
                         let nonnull =
-                            NonNull::new(components_from_u128::<T::Item>(new_ptr as u64).1 as *mut T::Item);
+                            NonNull::new(components_from_u128::<T::Item>(new_ptr as u128).1 as *mut T::Item);
                         Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
                     }
                 }
