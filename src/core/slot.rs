@@ -4,57 +4,59 @@ use portable_atomic::cfg_has_atomic_128;
 #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
 pub use tagged_ptr64::*;
 
+/// This trait allows the type to be stored in a TaggedPtr.
+/// SAFETY:
+/// - Since `PtrLike::as_ptr` and `PtrLike::from_raw` may be called during any queue operation, both must be atomic and wait-free.
+/// - `PtrLike::as_ptr` should never return a nullptr, as the nullptr is reserved for empty slots.
+/// - `TaggedPtr64` will truncate the ptr handed out from `PtrLike::as_ptr` to 48 bits and later cal `PtrLike::from_ptr` on the sign extended version of this, thus your pointer must fit into 48 bits.
+/// - The ptr handed out in `PtrLike::as_ptr` must be stable and valid for at least as long it is stored in the queue, i.e. the queues lifetime
 pub unsafe trait PtrLike: Sized {
     type Item;
-    fn as_ptr(zelf: Self) -> *mut Self::Item;
-    fn from_raw(raw: *mut Self::Item) -> Option<Self>;
+    fn as_ptr(zelf: Self) -> NonNull<Self::Item>;
+    fn from_raw(raw: NonNull<Self::Item>) -> Self;
 }
 
 unsafe impl<T> PtrLike for *const T {
     type Item = T;
-    fn as_ptr(zelf: Self) -> *mut T {
-        zelf as *mut T
+    fn as_ptr(zelf: Self) -> NonNull<T> {
+        NonNull::new(zelf as *mut T).expect("tried to store a nullptr in queue. This is UB")
     }
 
-    fn from_raw(raw: *mut Self::Item) -> Option<Self> {
-        Some(raw)
+    fn from_raw(raw: NonNull<Self::Item>) -> Self {
+        raw.as_ptr()
     }
 }
 
 unsafe impl<T> PtrLike for *mut T {
     type Item = T;
-    fn as_ptr(zelf: Self) -> *mut T {
-        zelf
+    fn as_ptr(zelf: Self) -> NonNull<T> {
+        NonNull::new(zelf).expect("tried to store a nullptr in queue. This is UB")
     }
 
-    fn from_raw(raw: *mut Self::Item) -> Option<Self> {
-        Some(raw as *mut T)
+    fn from_raw(raw: NonNull<Self::Item>) -> Self {
+        raw.as_ptr()
     }
 }
 
 unsafe impl<T> PtrLike for NonNull<T> {
     type Item = T;
-    fn as_ptr(zelf: Self) -> *mut Self::Item {
-        zelf.as_ptr()
+    fn as_ptr(zelf: Self) -> NonNull<Self::Item> {
+        zelf
     }
 
-    fn from_raw(raw: *mut Self::Item) -> Option<Self> {
-        NonNull::new(raw as *mut T)
+    fn from_raw(raw: NonNull<Self::Item>) -> Self {
+        raw
     }
 }
 
 unsafe impl<T> PtrLike for &'static T {
     type Item = T;
-    fn as_ptr(zelf: Self) -> *mut T {
-        zelf as *const T as *mut T
+    fn as_ptr(zelf: Self) -> NonNull<T> {
+        NonNull::from_ref(zelf)
     }
 
-    fn from_raw(raw: *mut T) -> Option<Self> {
-        if raw.is_null() {
-            None
-        } else {
-            Some(unsafe { &*raw })
-        }
+    fn from_raw(raw: NonNull<T>) -> Self {
+        unsafe { raw.as_ref() }
     }
 }
 
@@ -135,15 +137,27 @@ mod tagged_ptr64 {
             new_ptr: Option<T>,
             new_count: u64,
         ) -> Result<Option<T>, Option<T>> {
-            let new_ptr_ = new_ptr.map_or(null_mut(), |p| PtrLike::as_ptr(p));
+            let new_ptr_ = new_ptr.map_or(null_mut(), |p| PtrLike::as_ptr(p).as_ptr());
             let new_state = components_as_tagged(new_count, new_ptr_);
             let old_state = components_as_tagged(old_count, old_ptr);
-            self.ptr
-                .compare_exchange(old_state, new_state, Ordering::AcqRel, Ordering::Relaxed)
-                .map(|ptr| {
-                    PtrLike::from_raw(components_from_tagged::<T::Item>(ptr).1 as *mut T::Item)
-                })
-                .map_err(|_| PtrLike::from_raw(new_ptr_))
+            match self.ptr.compare_exchange(
+                old_state,
+                new_state,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(v) => {
+                    let nonnull =
+                        NonNull::new(components_from_tagged::<T::Item>(v).1 as *mut T::Item);
+                    Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                }
+                Err(_) => {
+                    let nonnull = NonNull::new(
+                        components_from_tagged::<T::Item>(new_ptr_ as u64).1 as *mut T::Item,
+                    );
+                    Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                }
+            }
         }
 
         fn is_empty(ptr: u64) -> bool {
@@ -154,7 +168,9 @@ mod tagged_ptr64 {
     impl<T: PtrLike> Drop for TaggedPtr64<T> {
         fn drop(&mut self) {
             let components = self.components();
-            let _ptr = T::from_raw(components.state as *mut T::Item);
+            if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
+                let _ptr = T::from_raw(ptr);
+            }
         }
     }
 
@@ -348,15 +364,24 @@ cfg_has_atomic_128! {
                 item: Option<Self::Item>,
                 new_count: u64,
             ) -> Result<Option<Self::Item>, Option<Self::Item>> {
-                let new_ptr = item.map_or(null_mut(), |ptr| PtrLike::as_ptr(ptr));
+                let new_ptr = item.map_or(null_mut(), |ptr| PtrLike::as_ptr(ptr).as_ptr());
                 let old = components_as_u128(old_count, old_ptr);
                 let new = components_as_u128(new_count, new_ptr);
-                self.storage
+                match self
+                    .storage
                     .compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
-                    .map(|dword| {
-                        PtrLike::from_raw(components_from_u128::<T::Item>(dword).1 as *mut T::Item)
-                    })
-                    .map_err(|_| PtrLike::from_raw(new_ptr))
+                {
+                    Ok(v) => {
+                        let nonnull =
+                            NonNull::new(components_from_u128::<T::Item>(v).1 as *mut T::Item);
+                        Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                    }
+                    Err(_) => {
+                        let nonnull =
+                            NonNull::new(components_from_u128::<T::Item>(new_ptr as u64).1 as *mut T::Item);
+                        Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                    }
+                }
             }
 
             fn is_empty(ptr: u64) -> bool {
@@ -364,15 +389,16 @@ cfg_has_atomic_128! {
             }
         }
 
-
         impl<T: PtrLike> Drop for TaggedPtr128<T> {
             fn drop(&mut self) {
                 let components = self.components();
-                let _ptr = T::from_raw(components.state as *mut T::Item);
+                if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
+                    let _ptr = T::from_raw(ptr);
+                }
             }
         }
 
-        impl<T: PtrLike> Default for TaggedPtr128 {
+        impl<T: PtrLike> Default for TaggedPtr128<T> {
             fn default() -> Self {
                 Self::new()
             }

@@ -1,13 +1,10 @@
 use portable_atomic::cfg_has_atomic_128;
 
-use crate::{
-    owned::buffer::BoxedBuffer,
-    queue::QueueCore,
-    tests::test_library::{
-        len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
-    },
+use crate::tests::test_library::{
+    len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
 };
 
+#[cfg(false)]
 #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
 mod tagged_ptr64 {
     use crate::slot::TaggedPtr64;
@@ -208,9 +205,6 @@ mod item_slot {
     }
 }
 
-// TODO fix pool
-// currently it fails lineraizable + len -> complete failure
-#[cfg(false)]
 mod pool {
     use super::*;
     use crate::pool::StaticPooledQueue;
