@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["tagged-ptr"]
+default = ["tagged-ptr", "pool", "alloc"]
 std = ["alloc"]
 alloc = []
 tagged-ptr = []
+pool = []
 
 [dependencies]
 cfg-if = "1.0.3"

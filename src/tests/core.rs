@@ -204,10 +204,10 @@ mod item_slot {
     }
 }
 
-#[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+#[cfg(all(feature = "tagged-ptr", target_has_atomic = "64", feature = "pool"))]
 mod pool {
     use super::*;
-    use crate::pool::StaticPooledQueue;
+    use crate::array::StaticPooledQueue;
 
     #[test]
     fn smoke_impl() {

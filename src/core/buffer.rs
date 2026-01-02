@@ -1,4 +1,4 @@
-pub(crate) trait Buffer {
+pub trait Buffer {
     type Slot;
 
     fn capacity(&self) -> usize;

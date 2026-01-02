@@ -6,12 +6,10 @@ use core::{
     ptr::NonNull,
 };
 
-use crate::{
-    ForcePushQueue, MPMCQueue,
-    array::{StaticQueue, buffer::ArrayBuf},
-    buffer::Buffer,
-    slot::{PtrLike, TaggedPtr64},
-};
+use crate::{ForcePushQueue, MPMCQueue, buffer::Buffer, slot::PtrLike};
+
+pub(crate) type IndexStorage = ItemHandle<()>;
+pub(crate) type DataStorage<T> = UnsafeCell<Option<T>>;
 
 struct Pool<T, DataBuf, Q> {
     data: DataBuf,
@@ -85,10 +83,7 @@ where
 {
 }
 
-type IndexStorage = ItemHandle<()>;
-type DataStorage<T> = UnsafeCell<Option<T>>;
-
-struct ItemHandle<T> {
+pub(crate) struct ItemHandle<T> {
     idx: usize,
     _phantom: PhantomData<T>,
 }
@@ -149,7 +144,7 @@ impl<T> Debug for ItemHandle<T> {
 // unsafe impl<T, I> Send for ItemHandle<T, I> where I: Send {}
 // unsafe impl<T, I> Sync for ItemHandle<T, I> where I: Sync {}
 
-struct Pooled<T, Q, DataBuf, IndexQ> {
+pub(crate) struct Pooled<T, Q, DataBuf, IndexQ> {
     q: Q,
     pool: Pool<T, DataBuf, IndexQ>,
 }
@@ -158,7 +153,7 @@ impl<T, Q, DataBuf, IndexQ> Pooled<T, Q, DataBuf, IndexQ>
 where
     IndexQ: MPMCQueue<Item = IndexStorage>,
 {
-    fn new_from(queue: Q, data_buf: DataBuf, idx_buf: IndexQ) -> Self {
+    pub(crate) fn new_from(queue: Q, data_buf: DataBuf, idx_buf: IndexQ) -> Self {
         Self {
             q: queue,
             pool: Pool::new(data_buf, idx_buf),
@@ -207,45 +202,3 @@ where
     IndexQ: MPMCQueue<Item = IndexStorage>,
 {
 }
-
-type StaticPooledQueue_<T, const N: usize> = Pooled<
-    T,
-    StaticQueue<N, TaggedPtr64<ItemHandle<T>>>,
-    ArrayBuf<N, UnsafeCell<Option<T>>>,
-    StaticQueue<N, TaggedPtr64<IndexStorage>>,
->;
-
-impl<T, const N: usize> StaticPooledQueue_<T, N> {
-    pub fn new() -> Self {
-        Self::new_from(StaticQueue::new(), ArrayBuf::new(), StaticQueue::new())
-    }
-}
-
-pub struct StaticPooledQueue<T, const N: usize>(StaticPooledQueue_<T, N>);
-
-impl<T, const N: usize> StaticPooledQueue<T, N> {
-    pub fn new() -> Self {
-        Self(StaticPooledQueue_::new())
-    }
-}
-
-impl<T, const N: usize> MPMCQueue for StaticPooledQueue<T, N> {
-    type Item = T;
-    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
-        self.0.push(item)
-    }
-
-    fn pop(&self) -> Option<Self::Item> {
-        self.0.pop()
-    }
-
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    fn capacity(&self) -> usize {
-        self.0.capacity()
-    }
-}
-
-impl<T, const N: usize> ForcePushQueue for StaticPooledQueue<T, N> {}

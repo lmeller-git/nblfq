@@ -1,15 +1,23 @@
 use crate::{
-    MPMCQueue,
-    core::slot::{PtrLike, Slot},
+    Auto, MPMCQueue, SlotType,
+    core::slot::PtrLike,
     owned::buffer::BoxedBuffer,
     queue::{ForcePushQueue, QueueCore},
 };
 
-pub struct Queue<S: Slot> {
-    inner: QueueCore<BoxedBuffer<S>>,
+pub struct Queue<T, S = Auto>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+    inner: QueueCore<BoxedBuffer<S::Slot>>,
 }
 
-impl<S: Slot> Queue<S> {
+impl<T, S> Queue<T, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
     pub fn new(size: usize) -> Self {
         Self {
             inner: QueueCore::new_in(BoxedBuffer::new(size)),
@@ -17,8 +25,12 @@ impl<S: Slot> Queue<S> {
     }
 }
 
-impl<S: Slot> MPMCQueue for Queue<S> {
-    type Item = S::Item;
+impl<T, S> MPMCQueue for Queue<T, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+    type Item = T;
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
         self.inner.push(item)
@@ -37,4 +49,9 @@ impl<S: Slot> MPMCQueue for Queue<S> {
     }
 }
 
-impl<S: Slot> ForcePushQueue for Queue<S> where S::Item: PtrLike {}
+impl<T, S> ForcePushQueue for Queue<T, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+}

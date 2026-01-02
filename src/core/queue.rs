@@ -2,7 +2,6 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{
     core::{buffer::Buffer, slot::Slot},
-    slot::PtrLike,
     utils::{comp, prev},
 };
 
@@ -15,11 +14,11 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
     /// fn run() {
-    ///     use nblf_queue::{array::StaticQueue, MPMCQueue, slot::TaggedPtr64};
+    ///     use nblf_queue::{array::StaticQueue, MPMCQueue};
     ///
-    ///     let q: StaticQueue<2, TaggedPtr64<_>> = StaticQueue::new();
+    ///     let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
     ///     assert_eq!(q.push(&10), Ok(()));
     ///     assert_eq!(q.push(&20), Ok(()));
@@ -27,7 +26,7 @@ pub trait MPMCQueue {
     ///     assert_eq!(q.pop(), Some(&10));
     /// }
     ///
-    /// #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
     /// run()
     /// ```
     fn push(&self, item: Self::Item) -> Result<(), Self::Item>;
@@ -36,18 +35,18 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
     /// fn run() {
-    ///     use nblf_queue::{array::StaticQueue, MPMCQueue, slot::TaggedPtr64};
+    ///     use nblf_queue::{array::StaticQueue, MPMCQueue};
     ///
-    ///     let q: StaticQueue<1, TaggedPtr64<_>> = StaticQueue::new();
+    ///     let q: StaticQueue<_, 1> = StaticQueue::new();
     ///
     ///     assert_eq!(q.push(&10), Ok(()));
     ///     assert_eq!(q.pop(), Some(&10));
     ///     assert!(q.pop().is_none());
     /// }
     ///
-    /// #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
     /// run()
     /// ```
     fn pop(&self) -> Option<Self::Item>;
@@ -80,11 +79,11 @@ pub trait ForcePushQueue: MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
     /// fn run() {
-    ///     use nblf_queue::{array::StaticQueue, ForcePushQueue, MPMCQueue, slot::TaggedPtr64};
+    ///     use nblf_queue::{array::StaticQueue, ForcePushQueue, MPMCQueue};
     ///
-    ///     let q: StaticQueue<2, TaggedPtr64<_>> = StaticQueue::new();
+    ///     let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
     ///     assert_eq!(q.force_push(&10), None);
     ///     assert_eq!(q.force_push(&20), None);
@@ -92,7 +91,7 @@ pub trait ForcePushQueue: MPMCQueue {
     ///     assert_eq!(q.pop(), Some(&20));
     /// }
     ///
-    /// #[cfg(all(feature = "tagged-ptr", target_has_atomic = "64"))]
+    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
     /// run()
     /// ```
     fn force_push(&self, mut item: Self::Item) -> Option<Self::Item> {
@@ -302,6 +301,5 @@ impl<B> ForcePushQueue for QueueCore<B>
 where
     B: Buffer,
     B::Slot: Slot,
-    <B::Slot as Slot>::Item: PtrLike,
 {
 }

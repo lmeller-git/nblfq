@@ -1,15 +1,23 @@
 use crate::{
-    MPMCQueue,
+    Auto, MPMCQueue, SlotType,
     array::buffer::ArrayBuf,
-    core::slot::{PtrLike, Slot},
+    core::slot::PtrLike,
     queue::{ForcePushQueue, QueueCore},
 };
 
-pub struct StaticQueue<const N: usize, S: Slot> {
-    inner: QueueCore<ArrayBuf<N, S>>,
+pub struct StaticQueue<T, const N: usize, S = Auto>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+    inner: QueueCore<ArrayBuf<N, S::Slot>>,
 }
 
-impl<const N: usize, S: Slot> StaticQueue<N, S> {
+impl<T, const N: usize, S> StaticQueue<T, N, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
     pub fn new() -> Self {
         Self {
             inner: QueueCore::new_in(ArrayBuf::new()),
@@ -17,8 +25,12 @@ impl<const N: usize, S: Slot> StaticQueue<N, S> {
     }
 }
 
-impl<const N: usize, S: Slot> MPMCQueue for StaticQueue<N, S> {
-    type Item = S::Item;
+impl<T, const N: usize, S> MPMCQueue for StaticQueue<T, N, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+    type Item = T;
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
         self.inner.push(item)
@@ -37,4 +49,9 @@ impl<const N: usize, S: Slot> MPMCQueue for StaticQueue<N, S> {
     }
 }
 
-impl<const N: usize, S: Slot> ForcePushQueue for StaticQueue<N, S> where S::Item: PtrLike {}
+impl<T, const N: usize, S> ForcePushQueue for StaticQueue<T, N, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+}
