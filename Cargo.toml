@@ -11,4 +11,4 @@ tagged-ptr = []
 
 [dependencies]
 cfg-if = "1.0.3"
-portable-atomic = {version = "1.11.1", default-features = false, features = ["require-cas"] } #features = ["fallback"] # (for testing AtomicU128)
+portable-atomic = {version = "1.11.1", default-features = false, features = ["require-cas"] }#["fallback"] }# (for testing AtomicU128)

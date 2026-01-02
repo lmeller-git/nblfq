@@ -96,6 +96,9 @@ where
         assert_eq!(q.len(), *i + 1);
     }
 
+    assert!(q.is_full());
+    assert_eq!(q.len(), CAP);
+
     for _ in 0..CAP {
         q.pop().unwrap();
     }
