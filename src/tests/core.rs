@@ -72,7 +72,7 @@ mod tagged_ptr64 {
 
 cfg_has_atomic_128! {
     mod tagged_ptr128 {
-        use crate::{owned::BoxedBuffer, core::QueueCore ,slot::TaggedPtr128};
+        use crate::{owned::buffer::BoxedBuffer, queue::QueueCore, slot::TaggedPtr128};
 
         use super::*;
 
