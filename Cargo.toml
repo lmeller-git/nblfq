@@ -4,12 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["tagged-ptr", "pool", "alloc"]
+default = []
 std = ["alloc"]
 alloc = []
-tagged-ptr = []
 pool = []
+atomic-fallback = ["portable-atomic/fallback"]
 
 [dependencies]
 cfg-if = "1.0.3"
-portable-atomic = {version = "1.11.1", default-features = false, features = ["require-cas"] }#["fallback"] }# (for testing AtomicU128)
+portable-atomic = {version = "1.11.1", default-features = false, features = ["require-cas"] }
+
+[dev-dependencies]
+portable-atomic = { version = "1.11.1", default-features = false, features = ["fallback"] }

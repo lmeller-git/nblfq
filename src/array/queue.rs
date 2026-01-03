@@ -2,6 +2,7 @@ use crate::{
     Auto, MPMCQueue, SlotType,
     array::buffer::ArrayBuf,
     core::slot::PtrLike,
+    pool::{DataStorage, IndexStorage, ItemHandle, Pooled},
     queue::{ForcePushQueue, QueueCore},
 };
 
@@ -13,13 +14,19 @@ where
     inner: QueueCore<ArrayBuf<N, S::Slot>>,
 }
 
-impl<T, const N: usize, S> StaticQueue<T, N, S>
+impl<T, const N: usize> StaticQueue<T, N, Auto>
 where
     T: PtrLike,
-    S: SlotType<T>,
 {
     pub fn new() -> Self {
-        Self {
+        Self::with_slot::<Auto>()
+    }
+
+    pub fn with_slot<S>() -> StaticQueue<T, N, S>
+    where
+        S: SlotType<T>,
+    {
+        StaticQueue {
             inner: QueueCore::new_in(ArrayBuf::new()),
         }
     }
@@ -55,3 +62,57 @@ where
     S: SlotType<T>,
 {
 }
+
+#[allow(private_bounds)]
+pub struct StaticPooledQueue<T, const N: usize, S = Auto>
+where
+    S: SlotType<ItemHandle<T>>,
+{
+    inner: Pooled<
+        T,
+        StaticQueue<ItemHandle<T>, N, S>,
+        ArrayBuf<N, DataStorage<T>>,
+        StaticQueue<IndexStorage, N>,
+    >,
+}
+
+#[allow(private_bounds)]
+impl<T, const N: usize> StaticPooledQueue<T, N, Auto> {
+    pub fn new() -> Self {
+        Self::with_slot::<Auto>()
+    }
+
+    pub fn with_slot<S>() -> StaticPooledQueue<T, N, S>
+    where
+        S: SlotType<ItemHandle<T>>,
+    {
+        StaticPooledQueue {
+            inner: Pooled::new_from(
+                StaticQueue::with_slot(),
+                ArrayBuf::new(),
+                StaticQueue::with_slot(),
+            ),
+        }
+    }
+}
+
+impl<T, const N: usize> MPMCQueue for StaticPooledQueue<T, N> {
+    type Item = T;
+    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+        self.inner.push(item)
+    }
+
+    fn pop(&self) -> Option<Self::Item> {
+        self.inner.pop()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
+}
+
+impl<T, const N: usize> ForcePushQueue for StaticPooledQueue<T, N> {}

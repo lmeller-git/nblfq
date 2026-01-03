@@ -1,9 +1,36 @@
-#[cfg(target_has_atomic = "128")]
+#[macro_export]
+macro_rules! cfg_taggedptr64 {
+    ($($item:item)*) => {
+       $(
+           #[cfg(all(
+                any(target_has_atomic = "64", feature = "atomic-fallback"),
+                target_endian = "little"
+            ))]
+            $item
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! cfg_taggedptr128 {
+    ($($item:item)*) => {
+        $(
+            #[cfg(any(target_has_atomic = "128", feature = "atomic-fallback"))]
+            $item
+        )*
+    };
+}
+
+cfg_taggedptr128! {
 pub(crate) use dword::*;
-#[cfg(all(target_has_atomic = "64", target_endian = "little"))]
+}
+cfg_taggedptr64! {
 pub(crate) use num_components::*;
-#[cfg(all(target_has_atomic = "64", target_endian = "little"))]
-pub(crate) use tagged::*;
+
+}
+cfg_taggedptr64! {
+pub(crate) use tagged::*;}
+pub(crate) use sealed::Sealed;
 
 pub(crate) fn prev(i: usize, size: usize) -> usize {
     (i + size - 1) % size
@@ -17,7 +44,12 @@ pub(crate) fn comp(i: usize, u: u64, j: usize, v: u64, w_max: u64) -> bool {
     }
 }
 
-#[cfg(target_has_atomic = "128")]
+pub(crate) mod sealed {
+    #[doc(hidden)]
+    pub trait Sealed {}
+}
+
+cfg_taggedptr128! {
 mod dword {
     // dword ptr 128bit:
     // |----64 bit----|----64 bit----|
@@ -33,8 +65,9 @@ mod dword {
         (count, ptr)
     }
 }
+}
 
-#[cfg(all(target_has_atomic = "64", target_endian = "little"))]
+cfg_taggedptr64! {
 mod num_components {
     // tagged ptr 64bit:
     // |--16 bit--|----48 bit----|
@@ -52,8 +85,9 @@ mod num_components {
         (count, raw_ptr)
     }
 }
+}
 
-#[cfg(all(target_has_atomic = "64", target_endian = "little"))]
+cfg_taggedptr64! {
 mod tagged {
     pub(crate) fn components_as_tagged<T>(count: u64, ptr: *const T) -> u64 {
         super::components_as_num(count, ptr as u64)
@@ -72,12 +106,13 @@ mod tagged {
         }
     }
 }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[cfg(all(target_has_atomic = "64", target_endian = "little"))]
+    cfg_taggedptr64! {
     mod tagged_ptr {
         use core::ptr::null;
 
@@ -138,65 +173,66 @@ mod tests {
             assert_eq!(*data, unsafe { *data_ });
         }
     }
+    }
+    cfg_taggedptr128! {
+        mod dword {
+            use super::*;
+            use core::ptr::null;
 
-    #[cfg(target_has_atomic = "128")]
-    mod dword {
-        use super::*;
-        use core::ptr::null;
+            #[test]
+            fn into_dword() {
+                let ptr = u64::MAX as *const u8;
+                let count = 0xDEAD;
+                let res = components_as_u128(count, ptr);
+                assert_eq!(res, 0xDEAD_u128 << 64 | u64::MAX as u128);
 
-        #[test]
-        fn into_dword() {
-            let ptr = u64::MAX as *const u8;
-            let count = 0xDEAD;
-            let res = components_as_u128(count, ptr);
-            assert_eq!(res, 0xDEAD_u128 << 64 | u64::MAX as u128);
+                let ptr2 = 0xDEAD_BEEF as *const u8;
+                let res = components_as_u128(count, ptr2);
+                assert_eq!(res, 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128);
 
-            let ptr2 = 0xDEAD_BEEF as *const u8;
-            let res = components_as_u128(count, ptr2);
-            assert_eq!(res, 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128);
+                let ptr: *const u8 = null();
+                assert_eq!(components_as_u128(0, ptr), 0);
+            }
 
-            let ptr: *const u8 = null();
-            assert_eq!(components_as_u128(0, ptr), 0);
-        }
+            #[test]
+            fn from_dword() {
+                let ptr = u64::MAX as *const u8;
+                let count = 0xDEAD;
+                let res = 0xDEAD_u128 << 64 | u64::MAX as u128;
 
-        #[test]
-        fn from_dword() {
-            let ptr = u64::MAX as *const u8;
-            let count = 0xDEAD;
-            let res = 0xDEAD_u128 << 64 | u64::MAX as u128;
+                assert_eq!(components_from_u128(res), (count, ptr));
 
-            assert_eq!(components_from_u128(res), (count, ptr));
+                let ptr2 = 0xDEAD_BEEF as *const u8;
+                let res = 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128;
 
-            let ptr2 = 0xDEAD_BEEF as *const u8;
-            let res = 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128;
+                assert_eq!(components_from_u128(res), (count, ptr2));
 
-            assert_eq!(components_from_u128(res), (count, ptr2));
+                let ptr: *const u8 = null();
+                assert_eq!(components_from_u128(0), (0, ptr));
+            }
 
-            let ptr: *const u8 = null();
-            assert_eq!(components_from_u128(0), (0, ptr));
-        }
+            #[test]
+            fn dword() {
+                let ptr = u64::MAX as *const u8;
+                let ptr2 = 0xDEAD_BEEF as *const u8;
+                let count = 0xDEAD;
 
-        #[test]
-        fn dword() {
-            let ptr = u64::MAX as *const u8;
-            let ptr2 = 0xDEAD_BEEF as *const u8;
-            let count = 0xDEAD;
+                assert_eq!(
+                    components_from_u128(components_as_u128(count, ptr)),
+                    (count, ptr)
+                );
+                assert_eq!(
+                    components_from_u128(components_as_u128(count, ptr2)),
+                    (count, ptr2)
+                );
 
-            assert_eq!(
-                components_from_u128(components_as_u128(count, ptr)),
-                (count, ptr)
-            );
-            assert_eq!(
-                components_from_u128(components_as_u128(count, ptr2)),
-                (count, ptr2)
-            );
-
-            let data = &4242;
-            let count = 42;
-            let val = components_as_u128(count, data as *const i32 as *const u8);
-            let (count_, data_): (_, *const i32) = components_from_u128(val);
-            assert_eq!(count, count_);
-            assert_eq!(unsafe { *data_ }, *data);
+                let data = &4242;
+                let count = 42;
+                let val = components_as_u128(count, data as *const i32 as *const u8);
+                let (count_, data_): (_, *const i32) = components_from_u128(val);
+                assert_eq!(count, count_);
+                assert_eq!(unsafe { *data_ }, *data);
+            }
         }
     }
 
