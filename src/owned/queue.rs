@@ -1,24 +1,52 @@
 use crate::{
     MPMCQueue,
-    core::slot::{PtrLike, Slot},
+    core::{
+        queue::QueueCore,
+        slot::PtrLike,
+        slots::{Auto, SlotType},
+    },
     owned::buffer::BoxedBuffer,
-    queue::{ForcePushQueue, QueueCore},
 };
 
-pub struct Queue<S: Slot> {
-    inner: QueueCore<BoxedBuffer<S>>,
+#[cfg(feature = "pool")]
+pub use pooled_queue::*;
+
+/// A `MPMCQueue` over an allocated array.
+/// only available on feature `alloc`
+pub struct Queue<T, S = Auto>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+    inner: QueueCore<BoxedBuffer<S::Slot>>,
 }
 
-impl<S: Slot> Queue<S> {
+impl<T> Queue<T, Auto>
+where
+    T: PtrLike,
+{
+    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`
     pub fn new(size: usize) -> Self {
-        Self {
+        Self::with_slot::<Auto>(size)
+    }
+
+    /// Constructs a new `Queue` with capacity `size` and slot type `S`
+    pub fn with_slot<S>(size: usize) -> Queue<T, S>
+    where
+        S: SlotType<T>,
+    {
+        Queue {
             inner: QueueCore::new_in(BoxedBuffer::new(size)),
         }
     }
 }
 
-impl<S: Slot> MPMCQueue for Queue<S> {
-    type Item = S::Item;
+impl<T, S> MPMCQueue for Queue<T, S>
+where
+    T: PtrLike,
+    S: SlotType<T>,
+{
+    type Item = T;
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
         self.inner.push(item)
@@ -37,4 +65,63 @@ impl<S: Slot> MPMCQueue for Queue<S> {
     }
 }
 
-impl<S: Slot> ForcePushQueue for Queue<S> where S::Item: PtrLike {}
+#[cfg(feature = "pool")]
+mod pooled_queue {
+    use super::*;
+    use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
+
+    /// The `Pooled` version of `Queue`.
+    /// Only available on feature `alloc` and `pool`
+    #[allow(private_bounds)]
+    pub struct PooledQueue<T, S = Auto>
+    where
+        S: SlotType<ItemHandle<T>>,
+    {
+        #[allow(clippy::type_complexity)]
+        inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, Queue<IndexStorage>>,
+    }
+
+    #[allow(private_bounds)]
+    impl<T> PooledQueue<T, Auto> {
+        /// Constructs a new `PooledQueue` with capacity `size` and slot type `Auto`
+        pub fn new(size: usize) -> Self {
+            Self::with_slot::<Auto>(size)
+        }
+
+        /// Constructs a new `PooledQueue` with capacity `size` and slot type `S`
+        pub fn with_slot<S>(size: usize) -> PooledQueue<T, S>
+        where
+            S: SlotType<ItemHandle<T>>,
+        {
+            PooledQueue {
+                inner: Pooled::new_from(
+                    Queue::with_slot(size),
+                    BoxedBuffer::new(size),
+                    Queue::with_slot(size),
+                ),
+            }
+        }
+    }
+
+    impl<T, S> MPMCQueue for PooledQueue<T, S>
+    where
+        S: SlotType<ItemHandle<T>>,
+    {
+        type Item = T;
+        fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+            self.inner.push(item)
+        }
+
+        fn pop(&self) -> Option<Self::Item> {
+            self.inner.pop()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn capacity(&self) -> usize {
+            self.inner.capacity()
+        }
+    }
+}

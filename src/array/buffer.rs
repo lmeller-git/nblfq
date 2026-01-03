@@ -1,6 +1,6 @@
 use core::array;
 
-use crate::buffer::Buffer;
+use crate::core::buffer::Buffer;
 
 pub(crate) struct ArrayBuf<const N: usize, S> {
     inner: [S; N],

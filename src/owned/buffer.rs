@@ -1,6 +1,6 @@
 use alloc::boxed::Box;
 
-use crate::buffer::Buffer;
+use crate::core::buffer::Buffer;
 
 pub(crate) struct BoxedBuffer<S> {
     inner: Box<[S]>,
