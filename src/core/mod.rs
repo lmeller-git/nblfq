@@ -55,7 +55,6 @@ pub mod slots {
     impl<T: PtrLike> SlotType<T> for Auto {
         #[cfg(all(
             any(target_has_atomic = "64", feature = "atomic-fallback"),
-            target_endian = "little",
             not(target_has_atomic = "128")
         ))]
         type Slot = slot::TaggedPtr64<T>;
@@ -65,10 +64,7 @@ pub mod slots {
         ))]
         type Slot = slot::TaggedPtr128<T>;
         #[cfg(all(
-            any(
-                not(any(target_has_atomic = "64", feature = "atomic-fallback")),
-                not(target_endian = "little")
-            ),
+            not(any(target_has_atomic = "64", feature = "atomic-fallback")),
             not(target_has_atomic = "128")
         ))]
         compile_error!("target arch is currently not supported");
