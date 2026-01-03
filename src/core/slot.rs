@@ -104,8 +104,10 @@ mod tagged_ptr64 {
     use core::{
         marker::PhantomData,
         ptr::{null, null_mut},
-        sync::atomic::{AtomicU64, Ordering},
+        sync::atomic::Ordering,
     };
+
+    use portable_atomic::AtomicU64;
 
     use crate::utils::{components_as_tagged, components_from_tagged};
 

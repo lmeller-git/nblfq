@@ -6,7 +6,10 @@ use core::{
     ptr::NonNull,
 };
 
-use crate::{ForcePushQueue, MPMCQueue, buffer::Buffer, slot::PtrLike};
+use crate::{
+    ForcePushQueue, MPMCQueue,
+    core::{buffer::Buffer, slot::PtrLike},
+};
 
 pub(crate) type IndexStorage = ItemHandle<()>;
 pub(crate) type DataStorage<T> = UnsafeCell<Option<T>>;

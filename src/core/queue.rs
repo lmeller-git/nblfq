@@ -14,20 +14,14 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
-    /// fn run() {
-    ///     use nblf_queue::{array::StaticQueue, MPMCQueue};
+    /// use nblf_queue::{StaticQueue, MPMCQueue};
     ///
-    ///     let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
-    ///     assert_eq!(q.push(&10), Ok(()));
-    ///     assert_eq!(q.push(&20), Ok(()));
-    ///     assert_eq!(q.push(&30), Err(&30));
-    ///     assert_eq!(q.pop(), Some(&10));
-    /// }
-    ///
-    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
-    /// run()
+    /// assert_eq!(q.push(&10), Ok(()));
+    /// assert_eq!(q.push(&20), Ok(()));
+    /// assert_eq!(q.push(&30), Err(&30));
+    /// assert_eq!(q.pop(), Some(&10));
     /// ```
     fn push(&self, item: Self::Item) -> Result<(), Self::Item>;
     /// pop the last item, if an item is contained
@@ -35,19 +29,13 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
-    /// fn run() {
-    ///     use nblf_queue::{array::StaticQueue, MPMCQueue};
+    /// use nblf_queue::{StaticQueue, MPMCQueue};
     ///
-    ///     let q: StaticQueue<_, 1> = StaticQueue::new();
+    /// let q: StaticQueue<_, 1> = StaticQueue::new();
     ///
-    ///     assert_eq!(q.push(&10), Ok(()));
-    ///     assert_eq!(q.pop(), Some(&10));
-    ///     assert!(q.pop().is_none());
-    /// }
-    ///
-    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
-    /// run()
+    /// assert_eq!(q.push(&10), Ok(()));
+    /// assert_eq!(q.pop(), Some(&10));
+    /// assert!(q.pop().is_none());
     /// ```
     fn pop(&self) -> Option<Self::Item>;
     /// Returns the current len of the queue.
@@ -79,20 +67,14 @@ pub trait ForcePushQueue: MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
-    /// fn run() {
-    ///     use nblf_queue::{array::StaticQueue, ForcePushQueue, MPMCQueue};
+    /// use nblf_queue::{StaticQueue, ForcePushQueue, MPMCQueue};
     ///
-    ///     let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
-    ///     assert_eq!(q.force_push(&10), None);
-    ///     assert_eq!(q.force_push(&20), None);
-    ///     assert_eq!(q.force_push(&30), Some(&10));
-    ///     assert_eq!(q.pop(), Some(&20));
-    /// }
-    ///
-    /// #[cfg(all(target_endian = "little", target_has_atomic = "64"))]
-    /// run()
+    /// assert_eq!(q.force_push(&10), None);
+    /// assert_eq!(q.force_push(&20), None);
+    /// assert_eq!(q.force_push(&30), Some(&10));
+    /// assert_eq!(q.pop(), Some(&20));
     /// ```
     fn force_push(&self, mut item: Self::Item) -> Option<Self::Item> {
         let mut popped_item = None;

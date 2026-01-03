@@ -7,14 +7,17 @@ extern crate alloc;
 #[cfg(any(feature = "std", test))]
 extern crate std;
 
-pub mod array;
+mod array;
 mod core;
 #[cfg(feature = "alloc")]
-pub mod owned;
-#[cfg(all(target_has_atomic = "64", feature = "pool"))]
-pub mod pool;
+mod owned;
+#[cfg(feature = "pool")]
+mod pool;
 #[cfg(test)]
 mod tests;
 mod utils;
 
-pub use crate::core::*;
+pub use crate::core::{ForcePushQueue, MPMCQueue, slots};
+pub use array::{StaticPooledQueue, StaticQueue};
+#[cfg(feature = "alloc")]
+pub use owned::{PooledQueue, Queue};

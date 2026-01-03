@@ -4,7 +4,7 @@ pub use queue::{PooledQueue, Queue};
 
 use core::ptr::NonNull;
 
-use crate::PtrLike;
+use crate::core::PtrLike;
 
 unsafe impl<T> PtrLike for alloc::boxed::Box<T> {
     type Item = T;

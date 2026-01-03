@@ -6,7 +6,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::{boxed::Box, thread::scope, vec::Vec};
 
-use crate::{MPMCQueue, queue::ForcePushQueue};
+use crate::{ForcePushQueue, MPMCQueue};
 
 pub(crate) fn smoke<Q>(q: Q)
 where

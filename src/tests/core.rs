@@ -7,7 +7,7 @@ use crate::{
 
 cfg_taggedptr64! {
 mod tagged_ptr64 {
-    use crate::{owned::buffer::BoxedBuffer, queue::QueueCore, slot::TaggedPtr64};
+    use crate::{owned::buffer::BoxedBuffer, core::{queue::QueueCore, slot::TaggedPtr64}};
 
     use super::*;
 
@@ -74,7 +74,7 @@ mod tagged_ptr64 {
 
 cfg_taggedptr128! {
 mod tagged_ptr128 {
-    use crate::{owned::buffer::BoxedBuffer, queue::QueueCore, slot::TaggedPtr128};
+    use crate::{owned::buffer::BoxedBuffer, core::{queue::QueueCore, slot::TaggedPtr128}};
 
     use super::*;
 

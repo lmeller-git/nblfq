@@ -1,9 +1,9 @@
 use crate::{
-    Auto, MPMCQueue, SlotType,
+    ForcePushQueue, MPMCQueue,
     array::buffer::ArrayBuf,
-    core::slot::PtrLike,
+    core::{PtrLike, queue::QueueCore},
     pool::{DataStorage, IndexStorage, ItemHandle, Pooled},
-    queue::{ForcePushQueue, QueueCore},
+    slots::{Auto, SlotType},
 };
 
 pub struct StaticQueue<T, const N: usize, S = Auto>
