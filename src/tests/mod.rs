@@ -1,4 +1,4 @@
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "std", test))]
 mod core;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "std", test))]
 mod test_library;

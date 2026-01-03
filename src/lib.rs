@@ -13,7 +13,7 @@ extern crate std;
 
 mod array;
 pub mod core;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", test))]
 mod owned;
 #[cfg(feature = "pool")]
 mod pool;
@@ -22,7 +22,7 @@ mod tests;
 mod utils;
 
 pub use array::{StaticPooledQueue, StaticQueue};
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", test))]
 pub use owned::{PooledQueue, Queue};
 
 /// The main trait used to interface with a MPMCQueue.
