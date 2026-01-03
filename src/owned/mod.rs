@@ -1,6 +1,8 @@
 pub(crate) mod buffer;
 mod queue;
-pub use queue::{PooledQueue, Queue};
+#[cfg(feature = "pool")]
+pub use queue::PooledQueue;
+pub use queue::Queue;
 
 use core::ptr::NonNull;
 
