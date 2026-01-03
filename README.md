@@ -1,5 +1,5 @@
-[![Codecov](https://codecov.io/github/lmeller-git/nblfqueue/coverage.svg?branch=main)](https://codecov.io/gh/lmeller-git/nblfqueue)
-![CI Test](https://github.com/lmeller-git/nblfqueue/actions/workflows/test.yml/badge.svg?branch=main)
+[![Codecov](https://codecov.io/github/lmeller-git/nblf-queue/coverage.svg?branch=main)](https://codecov.io/gh/lmeller-git/nblf-queue)
+![CI Test](https://github.com/lmeller-git/nblf-queue/actions/workflows/test.yml/badge.svg?branch=main)
 
 # nblf-queue
 
