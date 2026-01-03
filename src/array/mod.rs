@@ -4,4 +4,4 @@ mod queue;
 pub use queue::StaticQueue;
 
 #[cfg(feature = "pool")]
-pub use queue::StaticPooledQueue;
+pub use queue::PooledStaticQueue;

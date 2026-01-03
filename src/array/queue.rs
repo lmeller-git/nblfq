@@ -82,7 +82,7 @@ mod pooled_static {
     /// The `Pooled` variant of `StaticQueue`.
     /// Only available on feature `pool`
     #[allow(private_bounds)]
-    pub struct StaticPooledQueue<T, const N: usize, S = Auto>
+    pub struct PooledStaticQueue<T, const N: usize, S = Auto>
     where
         S: SlotType<ItemHandle<T>>,
     {
@@ -96,18 +96,18 @@ mod pooled_static {
     }
 
     #[allow(private_bounds)]
-    impl<T, const N: usize> StaticPooledQueue<T, N, Auto> {
+    impl<T, const N: usize> PooledStaticQueue<T, N, Auto> {
         /// Constructs a new `PooledStaticQueue` with slot type `Auto`
         pub fn new() -> Self {
             Self::with_slot::<Auto>()
         }
 
         /// Constructs a new `PooledStaticQueue` with slot type `S`
-        pub fn with_slot<S>() -> StaticPooledQueue<T, N, S>
+        pub fn with_slot<S>() -> PooledStaticQueue<T, N, S>
         where
             S: SlotType<ItemHandle<T>>,
         {
-            StaticPooledQueue {
+            PooledStaticQueue {
                 inner: Pooled::new_from(
                     StaticQueue::with_slot(),
                     ArrayBuf::new(),
@@ -117,7 +117,7 @@ mod pooled_static {
         }
     }
 
-    impl<T, const N: usize> MPMCQueue for StaticPooledQueue<T, N> {
+    impl<T, const N: usize> MPMCQueue for PooledStaticQueue<T, N> {
         type Item = T;
         fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
             self.inner.push(item)
@@ -136,7 +136,7 @@ mod pooled_static {
         }
     }
 
-    impl<T, const N: usize> Default for StaticPooledQueue<T, N, Auto> {
+    impl<T, const N: usize> Default for PooledStaticQueue<T, N, Auto> {
         fn default() -> Self {
             Self::new()
         }

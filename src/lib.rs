@@ -22,9 +22,13 @@ mod pool;
 mod tests;
 mod utils;
 
-pub use array::{StaticPooledQueue, StaticQueue};
+#[cfg(feature = "pool")]
+pub use array::PooledStaticQueue;
+pub use array::StaticQueue;
+#[cfg(all(any(feature = "alloc", test), feature = "pool"))]
+pub use owned::PooledQueue;
 #[cfg(any(feature = "alloc", test))]
-pub use owned::{PooledQueue, Queue};
+pub use owned::Queue;
 
 /// The main trait used to interface with a MPMCQueue.
 /// All methods in this trait are non-blocking and may fail.

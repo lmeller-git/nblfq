@@ -142,23 +142,23 @@ cfg_taggedptr128! {
 #[cfg(feature = "pool")]
 mod pool {
     use super::*;
-    use crate::array::StaticPooledQueue;
+    use crate::array::PooledStaticQueue;
 
     #[test]
     fn smoke_impl() {
-        let q: StaticPooledQueue<_, 2> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
         smoke(q);
     }
 
     #[test]
     fn smoke_long_impl() {
-        let q: StaticPooledQueue<_, 10> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 10> = PooledStaticQueue::new();
         smoke_long(q);
     }
 
     #[test]
     fn len_empty_full_impl() {
-        let q: StaticPooledQueue<_, 2> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
         len_empty_full(q);
     }
 
@@ -169,37 +169,37 @@ mod pool {
         #[cfg(not(miri))]
         const CAP: usize = 1000;
 
-        let q: StaticPooledQueue<_, CAP> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, CAP> = PooledStaticQueue::new();
         len(q);
     }
 
     #[test]
     fn spsc_impl() {
-        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
         spsc(q);
     }
 
     #[test]
     fn mpsc_impl() {
-        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
         mpsc(q);
     }
 
     #[test]
     fn mpmc_impl() {
-        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
         mpmc(q);
     }
 
     #[test]
     fn mpmc_ring_buffer_impl() {
-        let q: StaticPooledQueue<_, 3> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
         mpmc_ring_buffer(q);
     }
 
     #[test]
     fn linearizable_impl() {
-        let q: StaticPooledQueue<_, 4> = StaticPooledQueue::new();
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::new();
         linearizable(q);
     }
 }
