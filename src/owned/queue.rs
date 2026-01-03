@@ -11,6 +11,8 @@ use crate::{
 #[cfg(feature = "pool")]
 pub use pooled_queue::*;
 
+/// A `MPMCQueue` over an allocated array.
+/// only available on feature `alloc`
 pub struct Queue<T, S = Auto>
 where
     T: PtrLike,
@@ -23,10 +25,12 @@ impl<T> Queue<T, Auto>
 where
     T: PtrLike,
 {
+    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
+    /// Constructs a new `Queue` with capacity `size` and slot type `S`
     pub fn with_slot<S>(size: usize) -> Queue<T, S>
     where
         S: SlotType<T>,
@@ -66,6 +70,8 @@ mod pooled_queue {
     use super::*;
     use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
 
+    /// The `Pooled` version of `Queue`.
+    /// Only available on feature `alloc` and `pool`
     #[allow(private_bounds)]
     pub struct PooledQueue<T, S = Auto>
     where
@@ -76,10 +82,12 @@ mod pooled_queue {
 
     #[allow(private_bounds)]
     impl<T> PooledQueue<T, Auto> {
+        /// Constructs a new `PooledQueue` with capacity `size` and slot type `Auto`
         pub fn new(size: usize) -> Self {
             Self::with_slot::<Auto>(size)
         }
 
+        /// Constructs a new `PooledQueue` with capacity `size` and slot type `S`
         pub fn with_slot<S>(size: usize) -> PooledQueue<T, S>
         where
             S: SlotType<ItemHandle<T>>,

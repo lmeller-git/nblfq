@@ -11,10 +11,16 @@ cfg_taggedptr64! {
 /// - Since `PtrLike::as_ptr` and `PtrLike::from_raw` may be called during any queue operation, both must be atomic and wait-free.
 /// - `PtrLike::as_ptr` should never return a nullptr, as the nullptr is reserved for empty slots.
 /// - `TaggedPtr64` will truncate the ptr handed out from `PtrLike::as_ptr` to 48 bits and later cal `PtrLike::from_ptr` on the sign extended version of this, thus your pointer must fit into 48 bits.
-/// - The ptr handed out in `PtrLike::as_ptr` must be stable and valid for at least as long it is stored in the queue, i.e. the queues lifetime
+/// - The ptr handed out in `PtrLike::as_ptr` must be stable for at least as long it is stored in the queue, i.e. the queues lifetime
+/// - The ptr will never be dereferenced by the queue and may thus have any nonnull value
 pub unsafe trait PtrLike: Sized {
+    /// The pointee of this type.
     type Item;
+    /// transforms `Self` into a `NonNull`.
+    /// This method should never block
     fn as_ptr(zelf: Self) -> NonNull<Self::Item>;
+    /// transforms a `NonNull` into `Self`.
+    /// This method should never block
     fn from_raw(raw: NonNull<Self::Item>) -> Self;
 }
 
@@ -100,190 +106,190 @@ impl From<(u64, u64)> for SlotComponents {
 // TODO currently all tagged ptrs, ... assume little-endian architecture. This should be validated/ support for big-endian
 // TODO TaggedPtr64 should be feature gated by target_has_atomic = "64" and maybe ptr-size
 cfg_taggedptr64! {
-mod tagged_ptr64 {
-    use core::{
-        marker::PhantomData,
-        ptr::{null, null_mut},
-        sync::atomic::Ordering,
-    };
+    mod tagged_ptr64 {
+        use core::{
+            marker::PhantomData,
+            ptr::{null, null_mut},
+            sync::atomic::Ordering,
+        };
 
-    use portable_atomic::AtomicU64;
+        use portable_atomic::AtomicU64;
 
-    use crate::utils::{components_as_tagged, components_from_tagged};
+        use crate::utils::{components_as_tagged, components_from_tagged};
 
-    use super::*;
+        use super::*;
 
-    pub struct TaggedPtr64<T: PtrLike> {
-        ptr: AtomicU64,
-        _data: PhantomData<T>,
-    }
-
-    impl<T: PtrLike> Slot for TaggedPtr64<T> {
-        type Item = T;
-        const MAX_BITS: usize = 48;
-        const MAX_W: u64 = u16::MAX as u64 + 1;
-        const EMPTY_PTR: *const Self::Item = null();
-
-        fn new() -> Self {
-            Self {
-                ptr: AtomicU64::new(0),
-                _data: PhantomData,
-            }
+        pub struct TaggedPtr64<T: PtrLike> {
+            ptr: AtomicU64,
+            _data: PhantomData<T>,
         }
 
-        fn components(&self) -> SlotComponents {
-            let (c, p) = components_from_tagged::<T::Item>(self.ptr.load(Ordering::Acquire));
-            (c, p as u64).into()
-        }
+        impl<T: PtrLike> Slot for TaggedPtr64<T> {
+            type Item = T;
+            const MAX_BITS: usize = 48;
+            const MAX_W: u64 = u16::MAX as u64 + 1;
+            const EMPTY_PTR: *const Self::Item = null();
 
-        fn cmpxchg(
-            &self,
-            old_ptr: *const T,
-            old_count: u64,
-            new_ptr: Option<T>,
-            new_count: u64,
-        ) -> Result<Option<T>, Option<T>> {
-            let new_ptr_ = new_ptr.map_or(null_mut(), |p| PtrLike::as_ptr(p).as_ptr());
-            let new_state = components_as_tagged(new_count, new_ptr_);
-            let old_state = components_as_tagged(old_count, old_ptr);
-            match self.ptr.compare_exchange(
-                old_state,
-                new_state,
-                Ordering::AcqRel,
-                Ordering::Relaxed,
-            ) {
-                Ok(v) => {
-                    let nonnull =
-                        NonNull::new(components_from_tagged::<T::Item>(v).1 as *mut T::Item);
-                    Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
-                }
-                Err(_) => {
-                    let nonnull = NonNull::new(
-                        components_from_tagged::<T::Item>(new_ptr_ as u64).1 as *mut T::Item,
-                    );
-                    Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+            fn new() -> Self {
+                Self {
+                    ptr: AtomicU64::new(0),
+                    _data: PhantomData,
                 }
             }
-        }
 
-        fn is_empty(ptr: u64) -> bool {
-            (ptr as *const T::Item).is_null()
-        }
-    }
+            fn components(&self) -> SlotComponents {
+                let (c, p) = components_from_tagged::<T::Item>(self.ptr.load(Ordering::Acquire));
+                (c, p as u64).into()
+            }
 
-    impl<T: PtrLike> Drop for TaggedPtr64<T> {
-        fn drop(&mut self) {
-            let components = self.components();
-            if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
-                let _ptr = T::from_raw(ptr);
+            fn cmpxchg(
+                &self,
+                old_ptr: *const T,
+                old_count: u64,
+                new_ptr: Option<T>,
+                new_count: u64,
+            ) -> Result<Option<T>, Option<T>> {
+                let new_ptr_ = new_ptr.map_or(null_mut(), |p| PtrLike::as_ptr(p).as_ptr());
+                let new_state = components_as_tagged(new_count, new_ptr_);
+                let old_state = components_as_tagged(old_count, old_ptr);
+                match self.ptr.compare_exchange(
+                    old_state,
+                    new_state,
+                    Ordering::AcqRel,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(v) => {
+                        let nonnull =
+                            NonNull::new(components_from_tagged::<T::Item>(v).1 as *mut T::Item);
+                        Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                    }
+                    Err(_) => {
+                        let nonnull = NonNull::new(
+                            components_from_tagged::<T::Item>(new_ptr_ as u64).1 as *mut T::Item,
+                        );
+                        Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                    }
+                }
+            }
+
+            fn is_empty(ptr: u64) -> bool {
+                (ptr as *const T::Item).is_null()
             }
         }
-    }
 
-    impl<T: PtrLike> Default for TaggedPtr64<T> {
-        fn default() -> Self {
-            Self::new()
+        impl<T: PtrLike> Drop for TaggedPtr64<T> {
+            fn drop(&mut self) {
+                let components = self.components();
+                if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
+                    let _ptr = T::from_raw(ptr);
+                }
+            }
         }
-    }
 
-    unsafe impl<T: PtrLike + Send> Send for TaggedPtr64<T> {}
-    unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr64<T> {}
-}
+        impl<T: PtrLike> Default for TaggedPtr64<T> {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        unsafe impl<T: PtrLike + Send> Send for TaggedPtr64<T> {}
+        unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr64<T> {}
+    }
 }
 
 cfg_taggedptr128! {
-mod tagged_ptr_u128_portable {
-    use super::*;
-    use crate::utils::{components_as_u128, components_from_u128};
+    mod tagged_ptr_u128_portable {
+        use super::*;
+        use crate::utils::{components_as_u128, components_from_u128};
 
-    use portable_atomic::AtomicU128;
+        use portable_atomic::AtomicU128;
 
-    use core::{
-        marker::PhantomData,
-        ptr::{null, null_mut},
-        sync::atomic::Ordering,
-    };
+        use core::{
+            marker::PhantomData,
+            ptr::{null, null_mut},
+            sync::atomic::Ordering,
+        };
 
-    pub struct TaggedPtr128<T: PtrLike> {
-        storage: AtomicU128,
-        _data: PhantomData<T>,
-    }
-
-    impl<T: PtrLike> TaggedPtr128<T> {
-        pub(crate) fn from_u128(value: u128) -> Self {
-            Self {
-                storage: AtomicU128::new(value),
-                _data: PhantomData,
-            }
-        }
-    }
-
-    impl<T: PtrLike> Slot for TaggedPtr128<T> {
-        type Item = T;
-        const MAX_BITS: usize = 64; // techincally we could use more here, as the counter does not use the full 64 bits currently
-        const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
-        const EMPTY_PTR: *const Self::Item = null();
-
-        fn new() -> Self {
-            Self::from_u128(0)
+        pub struct TaggedPtr128<T: PtrLike> {
+            storage: AtomicU128,
+            _data: PhantomData<T>,
         }
 
-        fn components(&self) -> SlotComponents {
-            let (c, p) = components_from_u128::<T::Item>(self.storage.load(Ordering::Acquire));
-            (c, p as u64).into()
-        }
-
-        fn cmpxchg(
-            &self,
-            old_ptr: *const Self::Item,
-            old_count: u64,
-            item: Option<Self::Item>,
-            new_count: u64,
-        ) -> Result<Option<Self::Item>, Option<Self::Item>> {
-            let new_ptr = item.map_or(null_mut(), |ptr| PtrLike::as_ptr(ptr).as_ptr());
-            let old = components_as_u128(old_count, old_ptr);
-            let new = components_as_u128(new_count, new_ptr);
-            match self
-                .storage
-                .compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                Ok(v) => {
-                    let nonnull =
-                        NonNull::new(components_from_u128::<T::Item>(v).1 as *mut T::Item);
-                    Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
-                }
-                Err(_) => {
-                    let nonnull = NonNull::new(
-                        components_from_u128::<T::Item>(new_ptr as u128).1 as *mut T::Item,
-                    );
-                    Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+        impl<T: PtrLike> TaggedPtr128<T> {
+            pub(crate) fn from_u128(value: u128) -> Self {
+                Self {
+                    storage: AtomicU128::new(value),
+                    _data: PhantomData,
                 }
             }
         }
 
-        fn is_empty(ptr: u64) -> bool {
-            (ptr as *const T::Item).is_null()
-        }
-    }
+        impl<T: PtrLike> Slot for TaggedPtr128<T> {
+            type Item = T;
+            const MAX_BITS: usize = 64; // techincally we could use more here, as the counter does not use the full 64 bits currently
+            const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
+            const EMPTY_PTR: *const Self::Item = null();
 
-    impl<T: PtrLike> Drop for TaggedPtr128<T> {
-        fn drop(&mut self) {
-            let components = self.components();
-            if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
-                let _ptr = T::from_raw(ptr);
+            fn new() -> Self {
+                Self::from_u128(0)
+            }
+
+            fn components(&self) -> SlotComponents {
+                let (c, p) = components_from_u128::<T::Item>(self.storage.load(Ordering::Acquire));
+                (c, p as u64).into()
+            }
+
+            fn cmpxchg(
+                &self,
+                old_ptr: *const Self::Item,
+                old_count: u64,
+                item: Option<Self::Item>,
+                new_count: u64,
+            ) -> Result<Option<Self::Item>, Option<Self::Item>> {
+                let new_ptr = item.map_or(null_mut(), |ptr| PtrLike::as_ptr(ptr).as_ptr());
+                let old = components_as_u128(old_count, old_ptr);
+                let new = components_as_u128(new_count, new_ptr);
+                match self
+                    .storage
+                    .compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
+                {
+                    Ok(v) => {
+                        let nonnull =
+                            NonNull::new(components_from_u128::<T::Item>(v).1 as *mut T::Item);
+                        Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                    }
+                    Err(_) => {
+                        let nonnull = NonNull::new(
+                            components_from_u128::<T::Item>(new_ptr as u128).1 as *mut T::Item,
+                        );
+                        Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
+                    }
+                }
+            }
+
+            fn is_empty(ptr: u64) -> bool {
+                (ptr as *const T::Item).is_null()
             }
         }
-    }
 
-    impl<T: PtrLike> Default for TaggedPtr128<T> {
-        fn default() -> Self {
-            Self::new()
+        impl<T: PtrLike> Drop for TaggedPtr128<T> {
+            fn drop(&mut self) {
+                let components = self.components();
+                if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
+                    let _ptr = T::from_raw(ptr);
+                }
+            }
         }
-    }
 
-    unsafe impl<T: PtrLike + Send> Send for TaggedPtr128<T> {}
-    unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr128<T> {}
-}
+        impl<T: PtrLike> Default for TaggedPtr128<T> {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        unsafe impl<T: PtrLike + Send> Send for TaggedPtr128<T> {}
+        unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr128<T> {}
+    }
 }
 #[cfg(false)]
 pub use item_slot::*;

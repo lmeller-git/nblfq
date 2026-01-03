@@ -11,6 +11,7 @@ use crate::{
 #[cfg(feature = "pool")]
 pub use pooled_static::*;
 
+/// A `MPMCQueue` using a static array of capacity `N` as underlying buffer.
 pub struct StaticQueue<T, const N: usize, S = Auto>
 where
     T: PtrLike,
@@ -23,10 +24,12 @@ impl<T, const N: usize> StaticQueue<T, N, Auto>
 where
     T: PtrLike,
 {
+    /// Constructs a new `StaticQueue` with slot type `Auto`
     pub fn new() -> Self {
         Self::with_slot::<Auto>()
     }
 
+    /// Constructs a new `StaticQueue` with slot type `S`
     pub fn with_slot<S>() -> StaticQueue<T, N, S>
     where
         S: SlotType<T>,
@@ -67,6 +70,8 @@ mod pooled_static {
 
     use super::*;
 
+    /// The `Pooled` variant of `StaticQueue`.
+    /// Only available on feature `pool`
     #[allow(private_bounds)]
     pub struct StaticPooledQueue<T, const N: usize, S = Auto>
     where
@@ -82,10 +87,12 @@ mod pooled_static {
 
     #[allow(private_bounds)]
     impl<T, const N: usize> StaticPooledQueue<T, N, Auto> {
+        /// Constructs a new `PooledStaticQueue` with slot type `Auto`
         pub fn new() -> Self {
             Self::with_slot::<Auto>()
         }
 
+        /// Constructs a new `PooledStaticQueue` with slot type `S`
         pub fn with_slot<S>() -> StaticPooledQueue<T, N, S>
         where
             S: SlotType<ItemHandle<T>>,

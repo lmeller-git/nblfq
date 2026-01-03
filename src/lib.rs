@@ -1,4 +1,9 @@
+//! TODO doc for crate
+
 #![no_std]
+#![warn(missing_docs)]
+#![warn(clippy::missing_safety_doc)]
+#![warn(unsafe_op_in_unsafe_fn)]
 
 #[cfg(any(feature = "alloc", test))]
 extern crate alloc;
@@ -20,7 +25,10 @@ pub use array::{StaticPooledQueue, StaticQueue};
 #[cfg(feature = "alloc")]
 pub use owned::{PooledQueue, Queue};
 
+/// The main trait used to interface with a MPMCQueue.
+/// All methods in this trait are non-blocking and may fail.
 pub trait MPMCQueue {
+    /// The item stored in the queue
     type Item;
 
     /// Attempts to push an item into the queue.
