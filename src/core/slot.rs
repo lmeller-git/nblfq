@@ -6,8 +6,9 @@ cfg_taggedptr128! {
 cfg_taggedptr64! {
     pub use tagged_ptr64::*;
 }
+
 /// This trait allows the type to be stored in a TaggedPtr.
-/// SAFETY:
+/// # Safety
 /// - Since `PtrLike::as_ptr` and `PtrLike::from_raw` may be called during any queue operation, both must be atomic and wait-free.
 /// - `PtrLike::as_ptr` should never return a nullptr, as the nullptr is reserved for empty slots.
 /// - `TaggedPtr64` will truncate the ptr handed out from `PtrLike::as_ptr` to 48 bits and later cal `PtrLike::from_ptr` on the sign extended version of this, thus your pointer must fit into 48 bits.
@@ -24,6 +25,9 @@ pub unsafe trait PtrLike: Sized {
     fn from_raw(raw: NonNull<Self::Item>) -> Self;
 }
 
+// SAFETY:
+// For this to be safe, the user must guarantee that the ptr will:
+// - never be null, while stored in the queue
 unsafe impl<T> PtrLike for *const T {
     type Item = T;
     fn as_ptr(zelf: Self) -> NonNull<T> {
@@ -35,6 +39,9 @@ unsafe impl<T> PtrLike for *const T {
     }
 }
 
+// SAFETY:
+// For this to be safe, the user must guarantee that the ptr will:
+// - never be null, while stored in the queue
 unsafe impl<T> PtrLike for *mut T {
     type Item = T;
     fn as_ptr(zelf: Self) -> NonNull<T> {
@@ -46,6 +53,8 @@ unsafe impl<T> PtrLike for *mut T {
     }
 }
 
+// SAFETY:
+// this is a no-op
 unsafe impl<T> PtrLike for NonNull<T> {
     type Item = T;
     fn as_ptr(zelf: Self) -> NonNull<Self::Item> {
@@ -57,6 +66,8 @@ unsafe impl<T> PtrLike for NonNull<T> {
     }
 }
 
+// SAFETY:
+// A static reference is guaranteed to be nonnull and will live for the programs lifetime
 unsafe impl<T> PtrLike for &'static T {
     type Item = T;
     fn as_ptr(zelf: Self) -> NonNull<T> {
@@ -64,6 +75,8 @@ unsafe impl<T> PtrLike for &'static T {
     }
 
     fn from_raw(raw: NonNull<T>) -> Self {
+        // SAFETY:
+        // the reference is always nonnull and valid for 'static
         unsafe { raw.as_ref() }
     }
 }
@@ -192,7 +205,11 @@ cfg_taggedptr64! {
             }
         }
 
+        // SAFETY:
+        // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
         unsafe impl<T: PtrLike + Send> Send for TaggedPtr64<T> {}
+        // SAFETY:
+        // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
         unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr64<T> {}
     }
 }
@@ -287,10 +304,15 @@ cfg_taggedptr128! {
             }
         }
 
+        // SAFETY:
+        // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
         unsafe impl<T: PtrLike + Send> Send for TaggedPtr128<T> {}
+        // SAFETY:
+        // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
         unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr128<T> {}
     }
 }
+
 #[cfg(false)]
 pub use item_slot::*;
 

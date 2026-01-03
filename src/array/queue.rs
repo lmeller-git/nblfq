@@ -64,6 +64,15 @@ where
     }
 }
 
+impl<T, const N: usize> Default for StaticQueue<T, N, Auto>
+where
+    T: PtrLike,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(feature = "pool")]
 mod pooled_static {
     use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
@@ -77,6 +86,7 @@ mod pooled_static {
     where
         S: SlotType<ItemHandle<T>>,
     {
+        #[allow(clippy::type_complexity)]
         inner: Pooled<
             T,
             StaticQueue<ItemHandle<T>, N, S>,
@@ -123,6 +133,12 @@ mod pooled_static {
 
         fn capacity(&self) -> usize {
             self.inner.capacity()
+        }
+    }
+
+    impl<T, const N: usize> Default for StaticPooledQueue<T, N, Auto> {
+        fn default() -> Self {
+            Self::new()
         }
     }
 }

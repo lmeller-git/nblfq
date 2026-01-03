@@ -77,6 +77,7 @@ mod pooled_queue {
     where
         S: SlotType<ItemHandle<T>>,
     {
+        #[allow(clippy::type_complexity)]
         inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, Queue<IndexStorage>>,
     }
 

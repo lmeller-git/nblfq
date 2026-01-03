@@ -4,6 +4,7 @@
 #![warn(missing_docs)]
 #![warn(clippy::missing_safety_doc)]
 #![warn(unsafe_op_in_unsafe_fn)]
+#![warn(clippy::undocumented_unsafe_blocks)]
 
 #[cfg(any(feature = "alloc", test))]
 extern crate alloc;

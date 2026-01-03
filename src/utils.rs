@@ -95,7 +95,7 @@ cfg_taggedptr64! {
         //    count   |     ptr
         pub(crate) fn components_as_num(count: u64, state: u64) -> u64 {
             debug_assert!(count <= u16::MAX as u64, "Count too large for 16-bit field");
-            let ptr_non_extended = state as u64 & ((1u64 << 48) - 1);
+            let ptr_non_extended = state & ((1u64 << 48) - 1);
             (count << 48) | ptr_non_extended
         }
 
