@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(impl_trait_in_assoc_type)]
 
 #[cfg(any(feature = "alloc", test))]
 extern crate alloc;
@@ -8,7 +7,7 @@ extern crate alloc;
 extern crate std;
 
 mod array;
-mod core;
+pub mod core;
 #[cfg(feature = "alloc")]
 mod owned;
 #[cfg(feature = "pool")]
@@ -17,7 +16,89 @@ mod pool;
 mod tests;
 mod utils;
 
-pub use crate::core::{ForcePushQueue, MPMCQueue, slots};
 pub use array::{StaticPooledQueue, StaticQueue};
 #[cfg(feature = "alloc")]
 pub use owned::{PooledQueue, Queue};
+
+pub trait MPMCQueue {
+    type Item;
+
+    /// Attempts to push an item into the queue.
+    /// Returns the item as an error if the queue is full.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    ///
+    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    ///
+    /// assert_eq!(q.push(&10), Ok(()));
+    /// assert_eq!(q.push(&20), Ok(()));
+    /// assert_eq!(q.push(&30), Err(&30));
+    /// assert_eq!(q.pop(), Some(&10));
+    /// ```
+    fn push(&self, item: Self::Item) -> Result<(), Self::Item>;
+    /// pop the last item, if an item is contained
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    ///
+    /// let q: StaticQueue<_, 1> = StaticQueue::new();
+    ///
+    /// assert_eq!(q.push(&10), Ok(()));
+    /// assert_eq!(q.pop(), Some(&10));
+    /// assert!(q.pop().is_none());
+    /// ```
+    fn pop(&self) -> Option<Self::Item>;
+    /// Returns the current len of the queue.
+    /// This value may be stale.
+    fn len(&self) -> usize;
+    /// Returns the total capacity of the underlying buffer.
+    fn capacity(&self) -> usize;
+
+    /// Indicates whether the queue is empty.
+    /// The result may be stale.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Indicates whether the queue is full.
+    /// The result may be stale.
+    fn is_full(&self) -> bool {
+        self.len() == self.capacity()
+    }
+
+    /// Pushes an item into the queue, overwriting the last item if it is full
+    /// This method does NOT guarantee atomicity. It simply calls pop(), until push() is succesfull.
+    /// This also means that this method may spin for some time.
+    /// The last popped item is returned, if the queue was full
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    ///
+    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    ///
+    /// assert_eq!(q.force_push(&10), None);
+    /// assert_eq!(q.force_push(&20), None);
+    /// assert_eq!(q.force_push(&30), Some(&10));
+    /// assert_eq!(q.pop(), Some(&20));
+    /// ```
+    fn force_push(&self, mut item: Self::Item) -> Option<Self::Item> {
+        let mut popped_item = None;
+        let mut backoff = 1;
+        while let Err(item_) = self.push(item) {
+            item = item_;
+            for _ in 0..backoff {
+                ::core::hint::spin_loop();
+            }
+            backoff = (backoff * 2).min(1024);
+            popped_item = self.pop();
+        }
+        popped_item
+    }
+}

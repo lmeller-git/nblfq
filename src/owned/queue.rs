@@ -1,10 +1,15 @@
 use crate::{
-    ForcePushQueue, MPMCQueue,
-    core::{queue::QueueCore, slot::PtrLike},
+    MPMCQueue,
+    core::{
+        queue::QueueCore,
+        slot::PtrLike,
+        slots::{Auto, SlotType},
+    },
     owned::buffer::BoxedBuffer,
-    pool::{DataStorage, IndexStorage, ItemHandle, Pooled},
-    slots::{Auto, SlotType},
 };
+
+#[cfg(feature = "pool")]
+pub use pooled_queue::*;
 
 pub struct Queue<T, S = Auto>
 where
@@ -56,61 +61,58 @@ where
     }
 }
 
-impl<T, S> ForcePushQueue for Queue<T, S>
-where
-    T: PtrLike,
-    S: SlotType<T>,
-{
-}
+#[cfg(feature = "pool")]
+mod pooled_queue {
+    use super::*;
+    use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
 
-#[allow(private_bounds)]
-pub struct PooledQueue<T, S = Auto>
-where
-    S: SlotType<ItemHandle<T>>,
-{
-    inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, Queue<IndexStorage>>,
-}
-
-#[allow(private_bounds)]
-impl<T> PooledQueue<T, Auto> {
-    pub fn new(size: usize) -> Self {
-        Self::with_slot::<Auto>(size)
-    }
-
-    pub fn with_slot<S>(size: usize) -> PooledQueue<T, S>
+    #[allow(private_bounds)]
+    pub struct PooledQueue<T, S = Auto>
     where
         S: SlotType<ItemHandle<T>>,
     {
-        PooledQueue {
-            inner: Pooled::new_from(
-                Queue::with_slot(size),
-                BoxedBuffer::new(size),
-                Queue::with_slot(size),
-            ),
+        inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, Queue<IndexStorage>>,
+    }
+
+    #[allow(private_bounds)]
+    impl<T> PooledQueue<T, Auto> {
+        pub fn new(size: usize) -> Self {
+            Self::with_slot::<Auto>(size)
+        }
+
+        pub fn with_slot<S>(size: usize) -> PooledQueue<T, S>
+        where
+            S: SlotType<ItemHandle<T>>,
+        {
+            PooledQueue {
+                inner: Pooled::new_from(
+                    Queue::with_slot(size),
+                    BoxedBuffer::new(size),
+                    Queue::with_slot(size),
+                ),
+            }
+        }
+    }
+
+    impl<T, S> MPMCQueue for PooledQueue<T, S>
+    where
+        S: SlotType<ItemHandle<T>>,
+    {
+        type Item = T;
+        fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+            self.inner.push(item)
+        }
+
+        fn pop(&self) -> Option<Self::Item> {
+            self.inner.pop()
+        }
+
+        fn len(&self) -> usize {
+            self.inner.len()
+        }
+
+        fn capacity(&self) -> usize {
+            self.inner.capacity()
         }
     }
 }
-
-impl<T, S> MPMCQueue for PooledQueue<T, S>
-where
-    S: SlotType<ItemHandle<T>>,
-{
-    type Item = T;
-    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
-        self.inner.push(item)
-    }
-
-    fn pop(&self) -> Option<Self::Item> {
-        self.inner.pop()
-    }
-
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
-
-    fn capacity(&self) -> usize {
-        self.inner.capacity()
-    }
-}
-
-impl<T, S> ForcePushQueue for PooledQueue<T, S> where S: SlotType<ItemHandle<T>> {}

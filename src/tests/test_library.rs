@@ -6,7 +6,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::{boxed::Box, thread::scope, vec::Vec};
 
-use crate::{ForcePushQueue, MPMCQueue};
+use crate::MPMCQueue;
 
 pub(crate) fn smoke<Q>(q: Q)
 where
@@ -238,7 +238,7 @@ where
 
 pub(crate) fn mpmc_ring_buffer<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + ForcePushQueue + Sync,
+    Q: MPMCQueue<Item = Box<usize>> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 50;
@@ -286,7 +286,7 @@ where
 
 pub(crate) fn linearizable<Q>(q: Q)
 where
-    Q: ForcePushQueue<Item = &'static i32> + Sync,
+    Q: MPMCQueue<Item = &'static i32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 100;

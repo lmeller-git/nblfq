@@ -7,7 +7,7 @@ use core::{
 };
 
 use crate::{
-    ForcePushQueue, MPMCQueue,
+    MPMCQueue,
     core::{buffer::Buffer, slot::PtrLike},
 };
 
@@ -164,6 +164,7 @@ where
     }
 }
 
+// TODO could reuse the allocation of a popped item in force_push instead of reallocating
 impl<T, Q, DataBuf, IndexQ> MPMCQueue for Pooled<T, Q, DataBuf, IndexQ>
 where
     Q: MPMCQueue<Item = ItemHandle<T>>,
@@ -195,13 +196,4 @@ where
     fn capacity(&self) -> usize {
         self.q.capacity()
     }
-}
-
-// could reuse the allocation of a popped item here instead of reallocating
-impl<T, Q, DataBuf, IndexQ> ForcePushQueue for Pooled<T, Q, DataBuf, IndexQ>
-where
-    Q: MPMCQueue<Item = ItemHandle<T>>,
-    DataBuf: Buffer<Slot = DataStorage<T>>,
-    IndexQ: MPMCQueue<Item = IndexStorage>,
-{
 }

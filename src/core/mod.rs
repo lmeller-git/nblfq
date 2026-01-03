@@ -2,7 +2,6 @@ pub(crate) mod buffer;
 pub(crate) mod queue;
 pub(crate) mod slot;
 
-pub use queue::{ForcePushQueue, MPMCQueue};
 pub use slot::PtrLike;
 
 pub mod slots {
