@@ -1,0 +1,18 @@
+
+running 13 tests
+test utils::tests::comp_ ... ok
+test utils::tests::prev_ ... ok
+test utils::tests::tagged_ptr::from_tagged ... ok
+test utils::tests::tagged_ptr::into_tagged ... ok
+test utils::tests::tagged_ptr::tagged ... ok
+test tests::shuttle::taggedptr64::mpmc_ring_buffer_impl ... ok
+test tests::shuttle::pool::mpmc_ring_buffer_impl ... ok
+test tests::shuttle::taggedptr64::mpmc_impl ... ok
+test tests::shuttle::taggedptr64::mpsc_impl ... ok
+test tests::shuttle::taggedptr64::linearizable_impl ... ok
+test tests::shuttle::pool::mpsc_impl ... ok
+test tests::shuttle::pool::mpmc_impl ... ok
+test tests::shuttle::pool::linearizable_impl ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+

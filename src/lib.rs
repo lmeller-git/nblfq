@@ -130,13 +130,10 @@ pub trait MPMCQueue {
     /// ```
     fn force_push(&self, mut item: Self::Item) -> Option<Self::Item> {
         let mut popped_item = None;
-        let mut backoff = 1;
+        let mut backoff = crate::utils::Backoff::new();
         while let Err(item_) = self.push(item) {
             item = item_;
-            for _ in 0..backoff {
-                crate::sync::hint::spin_loop();
-            }
-            backoff = (backoff * 2).min(1024);
+            backoff.backoff();
             popped_item = self.pop();
         }
         popped_item
