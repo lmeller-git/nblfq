@@ -5,11 +5,18 @@
 
 An atomic wait-free MPMC queue based on the NBLFQ algorithm.
 
-This repository provides mutliple queue implementations, along with different `Slot` types.
-Slots determine how data is stored and updated. Currently only `TaggedPtr64` and `TaggedPtr128` are supported.
-`TaggedPtr64` and `TaggedPtr128` are only usable when storing pointers or small values, which are marked using `PtrLike`.
-`PtrLike` is implemented for some widely used pointers, but may also be implemented on your own types.
-To store arbitrary types, a pooled variant of all queues is available on feature `pool`.
+This repository provides multiple queue implementations with different storage and allocation strategies.
+
+All queues in this repository are safe to use in a concurrent context and will never block the calling thread.
+
+## Queue variants
+
+- **Static queues**: fixed-capacity queues backed by static storage
+- **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on fature `alloc`
+- **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`
+
+Non-pooled queues store items in atomically updated slots, restricting the stored items to small, pointer-like values.
+
 
 ## Usage
 
@@ -57,10 +64,11 @@ To store arbitrary types, a pooled variant of all queues is available on feature
 
 Multiple storage types are available, dependent on platform:
 
-- **TaggedPtr64** - 64-bit platforms with (at most) 48-bit virtual addresses (this is currently not checked) and 64-bit atomic operations or feature `atomic-fallback`
+- **TaggedPtr64** - platforms with native 64-bit atomic operations or feature `atomic-fallback`
 
-- **TaggedPtr128** - platforms with native atomic 128-bit support or feature `atomic-fallback`
+- **TaggedPtr128** - platforms with native 128-bit atomic operations or feature `atomic-fallback`
 
+Storage types will be chosen automatically, unless sepcified explicitly.
 
 ## Feature Flags
 
