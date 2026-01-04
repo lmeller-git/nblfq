@@ -18,5 +18,8 @@ portable-atomic = {version = "1.11.1", default-features = false, features = ["re
 [target.'cfg(loom)'.dependencies]
 loom = "0.7"
 
+[target.'cfg(shuttle)'.dependencies]
+shuttle = "0.8.1"
+
 [lints.rust]
-unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)'] }
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)'] }

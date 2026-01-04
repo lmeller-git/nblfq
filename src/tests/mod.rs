@@ -1,6 +1,8 @@
-#[cfg(all(not(loom), any(feature = "std", test)))]
+#[cfg(all(not(loom), not(shuttle)))]
 mod core;
-#[cfg(all(loom, any(feature = "std", test)))]
+#[cfg(loom)]
 mod loom;
-#[cfg(all(not(loom), any(feature = "std", test)))]
+#[cfg(shuttle)]
+mod shuttle;
+#[cfg(all(not(loom), not(shuttle)))]
 mod test_library;

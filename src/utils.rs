@@ -48,7 +48,37 @@ cfg_taggedptr64! {
 cfg_taggedptr64! {
     pub(crate) use tagged::*;
 }
+
 pub(crate) use sealed::Sealed;
+
+#[cfg(all(not(shuttle), not(loom), not(feature = "std")))]
+const MAX_SPINLOOP: usize = 1024;
+
+pub(crate) struct Backoff {
+    #[cfg(all(not(shuttle), not(loom), not(feature = "std")))]
+    state: usize,
+}
+
+impl Backoff {
+    pub fn new() -> Self {
+        #[cfg(all(not(shuttle), not(loom), not(feature = "std")))]
+        return Self { state: 1 };
+        #[cfg(any(shuttle, loom, feature = "std"))]
+        return Self {};
+    }
+
+    pub fn backoff(&mut self) {
+        #[cfg(all(not(shuttle), not(loom), not(feature = "std")))]
+        {
+            for _ in 0..self.state {
+                crate::sync::hint::spin_loop();
+            }
+            self.state = (self.state * 2).min(MAX_SPINLOOP);
+        }
+        #[cfg(any(shuttle, loom, feature = "std"))]
+        crate::sync::thread::yield_now();
+    }
+}
 
 pub(crate) fn prev(i: usize, size: usize) -> usize {
     (i + size - 1) % size
