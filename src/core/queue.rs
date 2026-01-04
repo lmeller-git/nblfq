@@ -1,8 +1,7 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
-
 use crate::{
     MPMCQueue,
     core::{buffer::Buffer, slot::Slot},
+    sync::atomic::{AtomicUsize, Ordering},
     utils::{comp, prev},
 };
 

@@ -14,3 +14,9 @@ atomic-fallback = ["portable-atomic/fallback"]
 
 [dependencies]
 portable-atomic = {version = "1.11.1", default-features = false, features = ["require-cas"] }
+
+[target.'cfg(loom)'.dependencies]
+loom = "0.7"
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)'] }

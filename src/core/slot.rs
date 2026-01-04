@@ -1,3 +1,4 @@
+use crate::{cfg_taggedptr64, cfg_taggedptr128};
 use ::core::ptr::NonNull;
 
 cfg_taggedptr128! {
@@ -125,12 +126,12 @@ cfg_taggedptr64! {
         use core::{
             marker::PhantomData,
             ptr::{null, null_mut},
-            sync::atomic::Ordering,
         };
 
-        use portable_atomic::AtomicU64;
-
-        use crate::utils::{components_as_tagged, components_from_tagged};
+        use crate::{
+            sync::atomic::{AtomicU64, Ordering},
+            utils::{components_as_tagged, components_from_tagged},
+        };
 
         use super::*;
 
@@ -218,16 +219,17 @@ cfg_taggedptr64! {
 
 cfg_taggedptr128! {
     mod tagged_ptr_u128_portable {
-        use super::*;
-        use crate::utils::{components_as_u128, components_from_u128};
-
-        use portable_atomic::AtomicU128;
-
         use core::{
             marker::PhantomData,
             ptr::{null, null_mut},
-            sync::atomic::Ordering,
         };
+
+        use crate::{
+            sync::atomic::{AtomicU128, Ordering},
+            utils::{components_as_u128, components_from_u128},
+        };
+
+        use super::*;
 
         pub struct TaggedPtr128<T: PtrLike> {
             storage: AtomicU128,
@@ -318,7 +320,6 @@ cfg_taggedptr128! {
 #[cfg(false)]
 pub use item_slot::*;
 
-use crate::{cfg_taggedptr64, cfg_taggedptr128};
 #[cfg(false)]
 // TODO fix this. This currently livelocks/(deadlocks?) in mpmc_ringbuffer test
 mod item_slot {

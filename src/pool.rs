@@ -1,5 +1,4 @@
 use core::{
-    cell::UnsafeCell,
     fmt::Debug,
     marker::PhantomData,
     ops::{Add, AddAssign, Sub, SubAssign},
@@ -9,6 +8,7 @@ use core::{
 use crate::{
     MPMCQueue,
     core::{buffer::Buffer, slot::PtrLike},
+    sync::cell::UnsafeCell,
 };
 
 pub(crate) type IndexStorage = ItemHandle<()>;
@@ -57,7 +57,7 @@ where
             .expect("popped an invalid index from self.free_slots. This is a bug.");
         // SAFETY:
         // The caller has to guarantee that each index is unique, i.e. that only one thread may own an index at a time.
-        unsafe { &mut *cell.get() }.replace(item);
+        cell.with_mut(|c| unsafe { &mut *c }.replace(item));
         Ok(next_free)
     }
 
@@ -66,8 +66,7 @@ where
         let slot = self.data.inner().get(idx.idx - 1)?;
         // SAFETY:
         // The caller has to guarantee that each index is unique, i.e. that only one thread may own an index at a time.
-        let cell = unsafe { &mut *slot.get() };
-        let item = cell.take();
+        let item = slot.with_mut(|c| unsafe { &mut *c }.take());
         _ = self.free_slots.push(ItemHandle::new(idx));
         item
     }
