@@ -32,7 +32,7 @@ macro_rules! cfg_taggedptr64 {
 macro_rules! cfg_taggedptr128 {
     ($($item:item)*) => {
         $(
-            #[cfg(any(target_has_atomic = "128", feature = "atomic-fallback"))]
+            #[cfg(any(target_has_atomic = "128", all(feature = "atomic-fallback", not(loom))))]
             $item
         )*
     };

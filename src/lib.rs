@@ -16,6 +16,7 @@ pub mod core;
 mod owned;
 #[cfg(feature = "pool")]
 mod pool;
+mod sync;
 #[cfg(test)]
 mod tests;
 mod utils;
@@ -133,7 +134,7 @@ pub trait MPMCQueue {
         while let Err(item_) = self.push(item) {
             item = item_;
             for _ in 0..backoff {
-                ::core::hint::spin_loop();
+                crate::sync::hint::spin_loop();
             }
             backoff = (backoff * 2).min(1024);
             popped_item = self.pop();
