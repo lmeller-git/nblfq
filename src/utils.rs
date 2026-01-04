@@ -188,6 +188,8 @@ mod tests {
                 let ptr = components_as_tagged(count, data as *const i32);
                 let (count_, data_): (_, *const i32) = components_from_tagged(ptr);
                 assert_eq!(count, count_);
+                // SAFETY:
+                // ptr to data or data was not modified, if components_as_tagged + from_tagged work as intended
                 assert_eq!(*data, unsafe { *data_ });
             }
         }

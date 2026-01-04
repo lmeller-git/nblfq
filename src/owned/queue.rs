@@ -11,7 +11,12 @@ use crate::{
 #[cfg(feature = "pool")]
 pub use pooled_queue::*;
 
-/// A `MPMCQueue` over an allocated array.
+/// A `MPMCQueue` over a heap-allocated array.
+///
+/// This queue only accepts items that implement `PtrLike`.
+///
+/// If you need to store larger types, consider using `PooledQueue` instead.
+///
 /// only available on feature `alloc`
 pub struct Queue<T, S = Auto>
 where
@@ -70,7 +75,9 @@ mod pooled_queue {
     use super::*;
     use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
 
-    /// The `Pooled` version of `Queue`.
+    /// A pooled `MPMCQueue`.
+    ///
+    /// Unlike `Queue`, this queue may store any type, at thecost of higher runtime and higher memory.
     /// Only available on feature `alloc` and `pool`
     #[allow(private_bounds)]
     pub struct PooledQueue<T, S = Auto>

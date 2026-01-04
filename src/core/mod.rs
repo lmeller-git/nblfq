@@ -1,4 +1,7 @@
-//! TODO doc for core module
+//! Core traits and types for interface with the queues in this crate.
+//!
+//! This module contains functionality, which interacts with the underlying implementations of queues.
+//! For most use cases it should not be neccessary to use any of this functionality.
 
 pub(crate) mod buffer;
 pub(crate) mod queue;
@@ -18,7 +21,7 @@ pub mod slots {
         mod tagged64 {
             use super::*;
             /// Slot type describing a tagged 64 bit pointer.
-            /// Only available if `target_has_atomic = "64"` is true or on feature `atomic-fallback` and `target_endian = "little"`.
+            /// Only available if `target_has_atomic = "64"` is true or on feature `atomic-fallback`.
             pub struct TaggedPtr64;
             impl Sealed for TaggedPtr64 {}
             impl<T: PtrLike> SlotType<T> for TaggedPtr64 {

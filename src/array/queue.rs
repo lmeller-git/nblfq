@@ -11,7 +11,11 @@ use crate::{
 #[cfg(feature = "pool")]
 pub use pooled_static::*;
 
-/// A `MPMCQueue` using a static array of capacity `N` as underlying buffer.
+/// A `MPMCQueue` with capacity `N`.
+///
+/// This queue only accepts items that implememt `PtrLike`.
+///
+/// If you need to store larger types, consider using `PooledStaticQueue` instead.
 pub struct StaticQueue<T, const N: usize, S = Auto>
 where
     T: PtrLike,
@@ -79,7 +83,10 @@ mod pooled_static {
 
     use super::*;
 
-    /// The `Pooled` variant of `StaticQueue`.
+    /// A pooled `MPMCQueue` with capacity `N`.
+    ///
+    /// Unlike `StaticQueue`, this queue may store any item at the cost of higher runtime and higher memory.
+    ///
     /// Only available on feature `pool`
     #[allow(private_bounds)]
     pub struct PooledStaticQueue<T, const N: usize, S = Auto>

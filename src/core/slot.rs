@@ -8,26 +8,29 @@ cfg_taggedptr64! {
 }
 
 /// This trait allows the type to be stored in a TaggedPtr.
+/// Consider using a pooled queue, instead of implementing this trait for your pointer, if performance cost are acceptable.
 /// # Safety
 /// - Since `PtrLike::as_ptr` and `PtrLike::from_raw` may be called during any queue operation, both must be atomic and wait-free.
 /// - `PtrLike::as_ptr` should never return a nullptr, as the nullptr is reserved for empty slots.
-/// - `TaggedPtr64` will truncate the ptr handed out from `PtrLike::as_ptr` to 48 bits and later cal `PtrLike::from_ptr` on the sign extended version of this, thus your pointer must fit into 48 bits.
+/// - `TaggedPtr64` will truncate the ptr handed out from `PtrLike::as_ptr` to 48 bits and later call `PtrLike::from_ptr` on the sign extended version of this, thus your pointer must fit into 48 bits.
 /// - The ptr handed out in `PtrLike::as_ptr` must be stable for at least as long it is stored in the queue, i.e. the queues lifetime
 /// - The ptr will never be dereferenced by the queue and may thus have any nonnull value
 pub unsafe trait PtrLike: Sized {
     /// The pointee of this type.
     type Item;
     /// transforms `Self` into a `NonNull`.
+    /// The caller is responsible for calling PtrLike::from_raw exactly once at some point on the returned value.
     /// This method should never block
     fn as_ptr(zelf: Self) -> NonNull<Self::Item>;
     /// transforms a `NonNull` into `Self`.
+    /// This method should only be used on ptrs obtained from PtrLike::as_ptr.
     /// This method should never block
     fn from_raw(raw: NonNull<Self::Item>) -> Self;
 }
 
 // SAFETY:
-// For this to be safe, the user must guarantee that the ptr will:
-// - never be null, while stored in the queue
+// the caller must guarantee that:
+// - the ptr will never be null, while stored in the queue
 unsafe impl<T> PtrLike for *const T {
     type Item = T;
     fn as_ptr(zelf: Self) -> NonNull<T> {
@@ -40,8 +43,8 @@ unsafe impl<T> PtrLike for *const T {
 }
 
 // SAFETY:
-// For this to be safe, the user must guarantee that the ptr will:
-// - never be null, while stored in the queue
+// the caller must guarantee that:
+// - the ptr will never be null, while stored in the queue
 unsafe impl<T> PtrLike for *mut T {
     type Item = T;
     fn as_ptr(zelf: Self) -> NonNull<T> {
@@ -76,7 +79,8 @@ unsafe impl<T> PtrLike for &'static T {
 
     fn from_raw(raw: NonNull<T>) -> Self {
         // SAFETY:
-        // the reference is always nonnull and valid for 'static
+        // the reference is always nonnull and valid for 'static.
+        // the caller must guarantee that raw was obtained from `as_ptr` on this reference and not modified afterwards
         unsafe { raw.as_ref() }
     }
 }
@@ -116,8 +120,6 @@ impl From<(u64, u64)> for SlotComponents {
     }
 }
 
-// TODO currently all tagged ptrs, ... assume little-endian architecture. This should be validated/ support for big-endian
-// TODO TaggedPtr64 should be feature gated by target_has_atomic = "64" and maybe ptr-size
 cfg_taggedptr64! {
     mod tagged_ptr64 {
         use core::{

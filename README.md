@@ -16,7 +16,7 @@ To store arbitrary types, a pooled variant of all queues is available on feature
 `nblf_queue::StaticQueue`:
 
 ```rust
-  use nblfq_queue::{StaticQueue, MPMCQueue};
+  use nblf_queue::{StaticQueue, MPMCQueue};
 
   let q: StaticQueue<_, 2> = StaticQueue::new();
 
@@ -33,7 +33,7 @@ To store arbitrary types, a pooled variant of all queues is available on feature
 `nblf_queue::PooledStaticQueue`:
 
 ```rust
-  use nblfq_queue::{PooledStaticQueue, MPMCQueue};
+  use nblf_queue::{PooledStaticQueue, MPMCQueue};
 
   let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
 
@@ -45,6 +45,12 @@ To store arbitrary types, a pooled variant of all queues is available on feature
   assert_eq!(q.pop(), Some(1));
   assert!(q.pop().is_none());
 ```
+
+
+## Choosing a queue type
+
+`StaticQueue` and `Queue` may only store ptrs and are optimized for this use case.
+`PooledStaticQueue` and `PooledQueue` may store arbitrary types, at the cost of higher memory usage and runtime cost.
 
 
 ## Platform Support
