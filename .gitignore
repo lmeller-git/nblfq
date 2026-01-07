@@ -1,2 +1,5 @@
 /target
 shuttle.out
+
+**.data
+**.svg

@@ -1,0 +1,10 @@
+[package]
+name = "profiling"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nblf-queue = { path = "..", features = ["std"] }
+
+[profile.release]
+debug = true

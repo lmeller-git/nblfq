@@ -5,6 +5,12 @@ edition = "2024"
 description = "Atomic, wait-free MPMC queues based on the nblfq algorithm"
 license = "MIT"
 
+[workspace]
+members = [
+  ".",
+  "profiling"
+]
+
 [features]
 default = ["pool"]
 std = ["alloc"]

@@ -2,7 +2,7 @@ use crate::{
     MPMCQueue,
     core::{buffer::Buffer, slot::Slot},
     sync::atomic::{AtomicUsize, Ordering},
-    utils::{comp, prev},
+    utils::{Backoff, comp, prev},
 };
 
 pub(crate) struct QueueCore<B: Buffer> {
@@ -40,6 +40,7 @@ where
     type Item = <B::Slot as Slot>::Item;
 
     fn push(&self, mut item: Self::Item) -> Result<(), Self::Item> {
+        let mut backoff = Backoff::new();
         let mut head = self.head.load(Ordering::Acquire);
         loop {
             let components = loop {
@@ -110,10 +111,12 @@ where
                     .store((head + 1) % self.buffer.capacity(), Ordering::Release);
                 return Ok(());
             };
+            backoff.backoff();
         }
     }
 
     fn pop(&self) -> Option<Self::Item> {
+        let mut backoff = Backoff::new();
         loop {
             let mut tail = self.tail.load(Ordering::Acquire);
             let mut prev_idx = prev(tail, self.buffer.capacity());
@@ -156,6 +159,7 @@ where
                 debug_assert!(item.is_some(), "we popped an empty item from the queue");
                 return item;
             }
+            backoff.backoff();
         }
     }
 

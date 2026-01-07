@@ -168,7 +168,7 @@ cfg_taggedptr64! {
                 let new_ptr_ = new_ptr.map_or(null_mut(), |p| PtrLike::as_ptr(p).as_ptr());
                 let new_state = components_as_tagged(new_count, new_ptr_);
                 let old_state = components_as_tagged(old_count, old_ptr);
-                match self.ptr.compare_exchange(
+                match self.ptr.compare_exchange_weak(
                     old_state,
                     new_state,
                     Ordering::AcqRel,
@@ -272,7 +272,7 @@ cfg_taggedptr128! {
                 let new = components_as_u128(new_count, new_ptr);
                 match self
                     .storage
-                    .compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
+                    .compare_exchange_weak(old, new, Ordering::AcqRel, Ordering::Relaxed)
                 {
                     Ok(v) => {
                         let nonnull =
