@@ -124,7 +124,10 @@ mod pooled_static {
         }
     }
 
-    impl<T, const N: usize> MPMCQueue for PooledStaticQueue<T, N> {
+    impl<T, const N: usize, S> MPMCQueue for PooledStaticQueue<T, N, S>
+    where
+        S: SlotType<ItemHandle<T>>,
+    {
         type Item = T;
         fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
             self.inner.push(item)
