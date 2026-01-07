@@ -252,6 +252,7 @@ mod owned {
         len_empty_full(q);
     }
 
+    #[cfg(feature = "pool")]
     mod pool {
         use crate::owned::PooledQueue;
 

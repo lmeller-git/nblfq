@@ -1,10 +1,6 @@
 use crate::{MPMCQueue, cfg_taggedptr64, cfg_taggedptr128};
 
-use crate::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-    thread,
-};
+use crate::sync::{Arc, thread};
 
 // TODO add more tests, however even simple tests are already too large...
 

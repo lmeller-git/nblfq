@@ -40,17 +40,23 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 `nblf_queue::PooledStaticQueue`:
 
 ```rust
-  use nblf_queue::{PooledStaticQueue, MPMCQueue};
+  #[cfg(feature = "pool")]
+  fn run() {
+    use nblf_queue::{PooledStaticQueue, MPMCQueue};
 
-  let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
+    let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
 
-  assert!(q.push(42).is_ok());
-  assert!(q.push(1).is_ok());
-  assert!(q.push(4242).is_err());
+    assert!(q.push(42).is_ok());
+    assert!(q.push(1).is_ok());
+    assert!(q.push(4242).is_err());
 
-  assert_eq!(q.pop(), Some(42));
-  assert_eq!(q.pop(), Some(1));
-  assert!(q.pop().is_none());
+    assert_eq!(q.pop(), Some(42));
+    assert_eq!(q.pop(), Some(1));
+    assert!(q.pop().is_none());
+  }
+
+  #[cfg(feature = "pool")]
+  run();
 ```
 
 

@@ -42,7 +42,7 @@ mod shuttle_ {
 #[cfg(all(loom, test))]
 mod loom_ {
     pub use loom::cell;
-    pub use loom::hint;
+    // pub use loom::hint;
     pub use loom::sync::Arc;
     pub use loom::sync::atomic;
     pub use loom::thread;
@@ -75,6 +75,7 @@ mod core_ {
             }
         }
     }
+    #[cfg(not(feature = "std"))]
     pub use core::hint;
     pub use portable_atomic as atomic;
 
