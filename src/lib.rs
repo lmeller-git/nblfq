@@ -92,19 +92,19 @@ pub trait MPMCQueue {
     /// ```
     fn pop(&self) -> Option<Self::Item>;
     /// Returns the current len of the queue.
-    /// The returned value may be stale under concurrent access.
+    /// The returned value may be stale under concurrent access and should not be used for synchronization.
     fn len(&self) -> usize;
     /// Returns the total capacity of the queue.
     fn capacity(&self) -> usize;
 
     /// Indicates whether the queue is empty.
-    /// The result may be stale under concurrent access.
+    /// The returned value may be stale under concurrent access and should not be used for synchronization.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Indicates whether the queue is full.
-    /// The result may be stale under concurrent access.
+    /// The returned value may be stale under concurrent access and should not be used for synchronization.
     fn is_full(&self) -> bool {
         self.len() == self.capacity()
     }

@@ -254,7 +254,12 @@ where
             scope.spawn(|| {
                 loop {
                     match t.load(Ordering::SeqCst) {
-                        0 if q.is_empty() => break,
+                        0 => {
+                            while let Some(n) = q.pop() {
+                                v[*n].fetch_add(1, Ordering::SeqCst);
+                            }
+                            break;
+                        }
 
                         _ => {
                             while let Some(n) = q.pop() {

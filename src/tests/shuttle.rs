@@ -6,40 +6,35 @@ use crate::{
     },
 };
 
-pub(crate) fn mpmc<Q>(q: Q)
+// TODO integrate this in test_library.rs
+
+pub(crate) fn spsc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = Box<usize>> + Sync,
 {
-    const COUNT: usize = 20;
-    const THREADS: usize = 4;
-    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+    const COUNT: usize = 50;
 
     thread::scope(|scope| {
-        for _ in 0..THREADS {
-            scope.spawn(|| {
-                for _ in 0..COUNT {
-                    let n = loop {
-                        if let Some(x) = q.pop() {
-                            break x;
-                        }
-                    };
-                    v[*n].fetch_add(1, Ordering::SeqCst);
+        scope.spawn(|| {
+            for i in 0..COUNT {
+                loop {
+                    if let Some(x) = q.pop() {
+                        assert_eq!(*x, i);
+                        break;
+                    }
                 }
-            });
-        }
-        for _ in 0..THREADS {
-            scope.spawn(|| {
-                for i in 0..COUNT {
-                    while q.push(Box::new(i)).is_err() {}
-                }
-            });
-        }
-    });
+            }
+            assert!(q.pop().is_none());
+        });
 
-    for c in v {
-        assert_eq!(c.load(Ordering::SeqCst), THREADS);
-    }
+        scope.spawn(|| {
+            for i in 0..COUNT {
+                while q.push(Box::new(i)).is_err() {}
+            }
+        });
+    })
 }
+
 pub(crate) fn mpsc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = Box<usize>> + Sync,
@@ -74,11 +69,46 @@ where
     }
 }
 
+pub(crate) fn mpmc<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = Box<usize>> + Sync,
+{
+    const COUNT: usize = 20;
+    const THREADS: usize = 4;
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    thread::scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for _ in 0..COUNT {
+                    let n = loop {
+                        if let Some(x) = q.pop() {
+                            break x;
+                        }
+                    };
+                    v[*n].fetch_add(1, Ordering::SeqCst);
+                }
+            });
+        }
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    while q.push(Box::new(i)).is_err() {}
+                }
+            });
+        }
+    });
+
+    for c in v {
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
+    }
+}
+
 pub(crate) fn mpmc_ring_buffer<Q>(q: Q)
 where
     Q: MPMCQueue<Item = Box<usize>> + Sync,
 {
-    const COUNT: usize = 10;
+    const COUNT: usize = 20;
     const THREADS: usize = 2;
 
     let t = AtomicUsize::new(THREADS);
@@ -89,7 +119,12 @@ where
             scope.spawn(|| {
                 loop {
                     match t.load(Ordering::SeqCst) {
-                        0 if q.is_empty() => break,
+                        0 => {
+                            while let Some(n) = q.pop() {
+                                v[*n].fetch_add(1, Ordering::SeqCst);
+                            }
+                            break;
+                        }
 
                         _ => {
                             while let Some(n) = q.pop() {
@@ -154,6 +189,17 @@ cfg_taggedptr64! {
         use super::*;
 
         #[test]
+        fn spsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = Queue::with_slot::<TaggedPtr64>(3);
+                    spsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
         fn mpmc_impl() {
             shuttle::check_random(
                 || {
@@ -163,6 +209,7 @@ cfg_taggedptr64! {
                 100,
             );
         }
+
         #[test]
         fn mpmc_ring_buffer_impl() {
             shuttle::check_random(
@@ -205,6 +252,17 @@ mod pool {
     use super::*;
 
     #[test]
+    fn spsc_impl() {
+        shuttle::check_random(
+            || {
+                let q = PooledQueue::new(3);
+                spsc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
     fn mpmc_impl() {
         shuttle::check_random(
             || {
@@ -214,6 +272,7 @@ mod pool {
             100,
         );
     }
+
     #[test]
     fn mpmc_ring_buffer_impl() {
         shuttle::check_random(

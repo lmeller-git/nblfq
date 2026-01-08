@@ -16,18 +16,18 @@ To run tests using `miri`:
   cargo miri test --locked --all-features
 ```
 
-`shuttle` tests currently do not support feature `atomic-fallback`.
-
 To run `loom` tests:
 
 ```bash
   LOOM_MAX_PREEMPTIONS=2 RUSTFLAGS="--cfg loom" cargo test --release --locked --lib
 ```
 
-`shuttle` tests currently do not support feature `atomic-fallback`.
+`loom` tests currently do not support feature `atomic-fallback`.
 
 To run `shuttle` tests:
 
 ```bash
   RUSTFLAGS="--cfg shuttle" cargo test --release --locked --lib
 ```
+
+`shuttle` tests currently do not support feature `atomic-fallback`.
