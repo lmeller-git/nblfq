@@ -105,9 +105,9 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    if let Some(n) = q.force_push(Box::new(i)) {
+                    q.force_push_and_do(Box::new(i), |n| {
                         v[*n].fetch_add(1, Ordering::SeqCst);
-                    }
+                    });
                 }
 
                 t.fetch_sub(1, Ordering::SeqCst);
@@ -116,7 +116,7 @@ where
     });
 
     for c in v {
-        assert!(c.load(Ordering::SeqCst) <= THREADS);
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
     }
 }
 
@@ -170,7 +170,7 @@ cfg_taggedptr64! {
                     let q = Queue::with_slot::<TaggedPtr64>(3);
                     mpmc_ring_buffer(q);
                 },
-                50,
+                100,
             );
         }
 
@@ -221,7 +221,7 @@ mod pool {
                 let q = PooledQueue::new(3);
                 mpmc_ring_buffer(q);
             },
-            50,
+            100,
         );
     }
 

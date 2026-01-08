@@ -86,6 +86,7 @@ where
                 head = (head + 1) % self.buffer.capacity();
             };
 
+            // at this point components is prev(current_component)
             let mut new_counter = components.count;
             if B::Slot::is_empty(components.state) {
                 // empty list
@@ -129,8 +130,8 @@ where
                 current_components.count,
                 B::Slot::MAX_W,
             ) {
+                prev_idx = tail;
                 tail = (tail + 1) % self.buffer.capacity();
-                prev_idx = prev(tail, self.buffer.capacity());
                 current_item = self.buffer.inner().get(tail)?;
                 (prev_components, current_components) =
                     (current_components, current_item.components());
@@ -143,7 +144,7 @@ where
                 return None;
             }
 
-            let next_count = (current_components.count + 1) % <B::Slot as Slot>::MAX_W;
+            let next_count = (current_components.count + 1) % B::Slot::MAX_W;
 
             if let Ok(item) = current_item.cmpxchg(
                 current_components.state as *const <B::Slot as Slot>::Item,

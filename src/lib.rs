@@ -128,14 +128,46 @@ pub trait MPMCQueue {
     /// assert_eq!(q.force_push(&30), Some(&10));
     /// assert_eq!(q.pop(), Some(&20));
     /// ```
-    fn force_push(&self, mut item: Self::Item) -> Option<Self::Item> {
-        let mut popped_item = None;
+    fn force_push(&self, item: Self::Item) -> Option<Self::Item> {
+        let mut item_container = None;
+        self.force_push_and_do(item, |item| {
+            item_container.replace(item);
+        });
+        item_container
+    }
+
+    /// Pushes an item into the queue, removing an existing item if the queue is full.
+    ///
+    /// If the queue is full, this method will remove items until space becomes available.
+    /// The provided closure will be called on each removed item.
+    ///
+    /// Under contention this method may spin for some time, however it will never block, provided the passed closure does not block.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    ///
+    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    ///
+    /// q.force_push_and_do(&10, |item| {});
+    /// q.force_push_and_do(&20, |item| {});
+    /// q.force_push_and_do(&30, |item| {
+    ///     assert_eq!(item, &10)
+    /// });
+    /// assert_eq!(q.pop(), Some(&20));
+    /// ```
+    fn force_push_and_do<F>(&self, mut item: Self::Item, mut f: F)
+    where
+        F: FnMut(Self::Item),
+    {
         let mut backoff = crate::utils::Backoff::new();
         while let Err(item_) = self.push(item) {
             item = item_;
             backoff.backoff();
-            popped_item = self.pop();
+            if let Some(next_popped_item) = self.pop() {
+                f(next_popped_item);
+            }
         }
-        popped_item
     }
 }

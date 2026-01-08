@@ -269,9 +269,9 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    if let Some(n) = q.force_push(Box::new(i)) {
+                    q.force_push_and_do(Box::new(i), |n| {
                         v[*n].fetch_add(1, Ordering::SeqCst);
-                    }
+                    })
                 }
 
                 t.fetch_sub(1, Ordering::SeqCst);
@@ -280,7 +280,7 @@ where
     });
 
     for c in v {
-        assert!(c.load(Ordering::SeqCst) <= THREADS);
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
     }
 }
 
@@ -313,16 +313,3 @@ where
         }
     })
 }
-
-// pub(crate) fn into_iter<Q>(q: Q)
-// wherepub
-//     Q: MPMCQueue<Item = &'static usize>,
-// {
-//     for i in 0..100 {
-//         let i: &'static _ = Box::leak(Box::new(i));
-//         q.push(i).unwrap();
-//     }
-//     for (i, j) in q.into_iter().enumerate() {
-//         assert_eq!(i, *j);
-//     }
-// }
