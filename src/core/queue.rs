@@ -103,7 +103,7 @@ where
                 .inner()
                 .get(head)
                 .expect("QueueCore.head is out of bounds. This is a Bug.")
-                .cmpxchg(B::Slot::EMPTY_PTR, new_counter, Some(item), new_counter)
+                .cmpxchg(B::Slot::EMPTY_VALUE, new_counter, Some(item), new_counter)
             {
                 item
             } else {
@@ -147,7 +147,7 @@ where
             let next_count = (current_components.count + 1) % B::Slot::MAX_W;
 
             if let Ok(item) = current_item.cmpxchg(
-                current_components.state as *const <B::Slot as Slot>::Item,
+                current_components.state,
                 current_components.count,
                 None,
                 next_count,

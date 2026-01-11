@@ -2,12 +2,11 @@ use core::{
     fmt::Debug,
     marker::PhantomData,
     ops::{Add, AddAssign, Sub, SubAssign},
-    ptr::NonNull,
 };
 
 use crate::{
     MPMCQueue,
-    core::{buffer::Buffer, slot::PtrLike},
+    core::{AsPackedValue, NonZeroTruncatedU64, buffer::Buffer},
     sync::cell::UnsafeCell,
 };
 
@@ -186,14 +185,15 @@ impl<T> Add<usize> for ItemHandle<T> {
 // the caller must ensure that:
 // - the index stored in ItemHandle<T> is never 0
 // - the index stored in ItemHandle<T> uses at most 48 bits, if stored in a TaggedPtr64
-unsafe impl<T> PtrLike for ItemHandle<T> {
-    type Item = T;
-    fn as_ptr(zelf: Self) -> NonNull<Self::Item> {
-        NonNull::new(zelf.idx() as *mut Self::Item).unwrap()
+unsafe impl<T> AsPackedValue for ItemHandle<T> {
+    const MIN_BIT_WIDTH: usize = 48;
+
+    fn encode(zelf: Self) -> crate::core::NonZeroTruncatedU64 {
+        NonZeroTruncatedU64::new::<48>(zelf.idx() as u64).unwrap()
     }
 
-    fn from_raw(raw: NonNull<Self::Item>) -> Self {
-        Self::new(OwnedIdx::new(raw.as_ptr() as usize))
+    unsafe fn decode(raw: crate::core::NonZeroTruncatedU64) -> Self {
+        Self::new(OwnedIdx::new(raw.read() as usize))
     }
 }
 

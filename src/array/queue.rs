@@ -2,7 +2,7 @@ use crate::{
     MPMCQueue,
     array::buffer::ArrayBuf,
     core::{
-        PtrLike,
+        AsPackedValue,
         queue::QueueCore,
         slots::{Auto, SlotType},
     },
@@ -18,7 +18,7 @@ pub use pooled_static::*;
 /// If you need to store larger types, consider using `PooledStaticQueue` instead.
 pub struct StaticQueue<T, const N: usize, S = Auto>
 where
-    T: PtrLike,
+    T: AsPackedValue,
     S: SlotType<T>,
 {
     inner: QueueCore<ArrayBuf<N, S::Slot>>,
@@ -26,7 +26,7 @@ where
 
 impl<T, const N: usize> StaticQueue<T, N, Auto>
 where
-    T: PtrLike,
+    T: AsPackedValue,
 {
     /// Constructs a new `StaticQueue` with slot type `Auto`
     pub fn new() -> Self {
@@ -46,7 +46,7 @@ where
 
 impl<T, const N: usize, S> MPMCQueue for StaticQueue<T, N, S>
 where
-    T: PtrLike,
+    T: AsPackedValue,
     S: SlotType<T>,
 {
     type Item = T;
@@ -70,7 +70,7 @@ where
 
 impl<T, const N: usize> Default for StaticQueue<T, N, Auto>
 where
-    T: PtrLike,
+    T: AsPackedValue,
 {
     fn default() -> Self {
         Self::new()

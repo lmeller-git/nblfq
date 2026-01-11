@@ -4,17 +4,18 @@
 //! For most use cases it should not be neccessary to use any of this functionality.
 
 pub(crate) mod buffer;
+pub(crate) mod packed;
 pub(crate) mod queue;
 pub(crate) mod slot;
 
-pub use slot::PtrLike;
+pub use packed::{AsPackedValue, NonZeroTruncatedU64};
 
 pub mod slots {
     //! Module containing types used to determine the underlying storage type in nblf-queue Queues.
     //! In most cases the `Auto` type, which is used as default across this crate, should suffice.
 
     use super::*;
-    use crate::{cfg_taggedptr64, cfg_taggedptr128, utils::Sealed};
+    use crate::utils::Sealed;
 
     cfg_taggedptr64! {
         pub use tagged64::*;
@@ -24,7 +25,7 @@ pub mod slots {
             /// Only available if `target_has_atomic = "64"` is true or on feature `atomic-fallback`.
             pub struct TaggedPtr64;
             impl Sealed for TaggedPtr64 {}
-            impl<T: PtrLike> SlotType<T> for TaggedPtr64 {
+            impl<T: AsPackedValue> SlotType<T> for TaggedPtr64 {
                 type Slot = slot::TaggedPtr64<T>;
             }
         }
@@ -38,7 +39,7 @@ pub mod slots {
             /// Only available if `target_has_atomic = "128"` is true or on feature `atomic-fallback`.
             pub struct TaggedPtr128;
             impl Sealed for TaggedPtr128 {}
-            impl<T: PtrLike> SlotType<T> for TaggedPtr128 {
+            impl<T: AsPackedValue> SlotType<T> for TaggedPtr128 {
                 type Slot = slot::TaggedPtr128<T>;
             }
 
@@ -50,12 +51,12 @@ pub mod slots {
     impl Sealed for Auto {}
 
     #[doc(hidden)]
-    pub trait SlotType<T: PtrLike>: Sealed {
+    pub trait SlotType<T: AsPackedValue>: Sealed {
         #[allow(private_bounds)]
         type Slot: slot::Slot<Item = T>;
     }
 
-    impl<T: PtrLike> SlotType<T> for Auto {
+    impl<T: AsPackedValue> SlotType<T> for Auto {
         #[cfg(all(
             any(target_has_atomic = "64", feature = "atomic-fallback"),
             not(target_has_atomic = "128")
