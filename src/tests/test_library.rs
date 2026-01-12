@@ -310,7 +310,14 @@ where
 
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    if q.force_push(&0).is_none() {
+                    let popped = &mut false;
+                    q.force_push_and_do(&0, |_| {
+                        if *popped {
+                            panic!("popped multiple items")
+                        }
+                        *popped = true;
+                    });
+                    if !*popped {
                         q.pop().unwrap();
                     }
                 }

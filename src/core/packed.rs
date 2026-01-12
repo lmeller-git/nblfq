@@ -168,7 +168,7 @@ mod x86_64 {
         }
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", test))]
     mod alloc_ {
         use super::*;
 
@@ -311,7 +311,7 @@ mod x86_64 {
         }
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", test))]
     mod alloc_ {
         use super::*;
 

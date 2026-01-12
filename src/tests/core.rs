@@ -1,8 +1,5 @@
-use crate::{
-    cfg_taggedptr64, cfg_taggedptr128,
-    tests::test_library::{
-        len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
-    },
+use crate::tests::test_library::{
+    len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
 };
 
 cfg_taggedptr64! {
