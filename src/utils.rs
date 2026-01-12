@@ -93,9 +93,6 @@ macro_rules! pack {
     (($upper:expr, $lower:expr): $width:expr) => {
         (($upper) << $width) | ($lower)
     };
-    (($lower:expr): $width:expr) => {
-        $lower & ((1 << $width) - 1)
-    };
 }
 
 // Safety:
@@ -103,12 +100,16 @@ macro_rules! pack {
 // the value as produced by pack!() with the correct parameters
 macro_rules! unpack {
     (($packed:expr): $width:expr) => {{
-        let upper = $packed >> $width;
-        let lower = $packed & ((1 << $width) - 1);
+        // make sure to evaluate passed exprs only once
+        let width = $width;
+        let packed_value = $packed;
+        let upper = packed_value >> width;
+        let lower = packed_value & ((1 << width) - 1);
         (upper, lower)
     }};
 }
 
+#[cfg(test)]
 pub(crate) fn sign_erase(ptr: u64) -> u64 {
     ptr & ((1u64 << 48) - 1)
 }

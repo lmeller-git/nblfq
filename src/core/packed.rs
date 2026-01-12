@@ -24,7 +24,7 @@ impl NonZeroTruncatedU64 {
     /// TODO
     pub fn new<const BIT_WIDTH: usize>(mut value: u64) -> Option<Self> {
         if BIT_WIDTH < 64 {
-            value = pack!((value): BIT_WIDTH);
+            value = unpack!((value): BIT_WIDTH).1;
         }
         Some(Self {
             v: NonZeroU64::new(value)?,
