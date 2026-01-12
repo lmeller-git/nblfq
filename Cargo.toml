@@ -13,7 +13,10 @@ pool = []
 atomic-fallback = ["portable-atomic/fallback"]
 
 [dependencies]
-portable-atomic = {version = "1.11.1", default-features = false, features = ["require-cas"] }
+portable-atomic = { version = "1.11.1", default-features = false, features = ["require-cas"] }
+
+[dev-dependencies]
+criterion = { version = "0.8.1", features = ["html_reports"] }
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.7"
@@ -21,5 +24,12 @@ loom = "0.7"
 [target.'cfg(shuttle)'.dependencies]
 shuttle = "0.8.1"
 
+[target.'cfg(bench_crossbeam)'.dev-dependencies]
+crossbeam-queue = "0.3.12"
+
 [lints.rust]
-unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)'] }
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)', 'cfg(bench_crossbeam)'] }
+
+[[bench]]
+name = "queue_benchmarks"
+harness = false
