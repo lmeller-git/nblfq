@@ -182,7 +182,7 @@ where
     })
 }
 
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     mod taggedptr64 {
         use crate::{Queue, core::slots::TaggedPtr64};
 

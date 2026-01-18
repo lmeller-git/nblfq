@@ -1,4 +1,4 @@
-use crate::{MPMCQueue, cfg_taggedptr64, cfg_taggedptr128};
+use crate::MPMCQueue;
 
 use crate::sync::{Arc, thread};
 
@@ -40,7 +40,7 @@ where
     }
 }
 
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     mod taggedptr64 {
         use crate::{Queue, core::slots::TaggedPtr64};
 
@@ -56,7 +56,7 @@ cfg_taggedptr64! {
     }
 }
 
-cfg_taggedptr128! {
+cfg_atomic_tagged128! {
     mod taggedptr128 {
         use crate::{Queue, core::slots::TaggedPtr128};
 

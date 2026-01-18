@@ -2,7 +2,7 @@ use crate::tests::test_library::{
     len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
 };
 
-cfg_tagged64! {
+cfg_atomic_tagged64! {
     mod tagged_ptr64 {
         use crate::{owned::buffer::BoxedBuffer, core::{queue::QueueCore, slot::Tagged64}};
 
