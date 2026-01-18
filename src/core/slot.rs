@@ -9,12 +9,13 @@ cfg_taggedptr64! {
 
 pub(crate) trait Slot: Default {
     type Item;
+    type Storage: Copy;
     const MAX_W: u64;
     const EMPTY_VALUE: u64;
     const MAX_CARGO_BIT_WIDTH: usize;
 
     fn new() -> Self;
-    fn components(&self) -> SlotComponents;
+    fn components(&self) -> SlotComponents<Self>;
     fn cmpxchg(
         &self,
         old_value: u64,
@@ -22,23 +23,39 @@ pub(crate) trait Slot: Default {
         item: Option<Self::Item>,
         new_count: u64,
     ) -> Result<Option<Self::Item>, Option<Self::Item>>;
-    fn is_empty(state: u64) -> bool;
+    fn is_empty(components: &SlotComponents<Self>) -> bool;
+    fn extract_count(value: Self::Storage) -> u64;
+    fn extract_value(value: Self::Storage) -> u64;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SlotComponents {
-    pub count: u64,
-    pub state: u64,
+pub struct SlotComponents<S>
+where
+    S: Slot,
+{
+    value: S::Storage,
 }
 
-impl From<(u64, u64)> for SlotComponents {
-    fn from(value: (u64, u64)) -> Self {
-        Self {
-            count: value.0,
-            state: value.1,
-        }
+impl<S> SlotComponents<S>
+where
+    S: Slot,
+    S::Storage: Copy,
+{
+    fn new(value: S::Storage) -> Self {
+        Self { value }
+    }
+
+    pub(crate) fn get_count(&self) -> u64 {
+        S::extract_count(self.value)
+    }
+
+    pub(crate) fn get_value(&self) -> u64 {
+        S::extract_value(self.value)
     }
 }
+
+// TODO
+// use more bits of the tagged value for count, based on Item::MIN_BITS
 
 cfg_taggedptr64! {
     mod tagged_ptr64 {
@@ -49,6 +66,11 @@ cfg_taggedptr64! {
         use super::*;
 
         const MAX_CARGO_BIT_WIDTH: usize = 48;
+        const NON_COUNT_BITS: usize = MAX_CARGO_BIT_WIDTH + 1;
+
+        // this slot stores the item in a tagged U64 value.
+        // `count` takes up the upper 15 bits and `item` takes up the lower 48 bits.
+        // this leaves 1 bit of state, which is used to encode `empty` vs `full`
 
         pub struct TaggedPtr64<T: AsPackedValue> {
             state: AtomicU64,
@@ -57,24 +79,23 @@ cfg_taggedptr64! {
 
         impl<T: AsPackedValue> Slot for TaggedPtr64<T> {
             type Item = T;
-            const MAX_W: u64 = u16::MAX as u64 + 1;
+            type Storage = u64;
+            const MAX_W: u64 = u16::MAX as u64 / 2 + 1;
             const EMPTY_VALUE: u64 = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
             fn new() -> Self {
+                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH) };
                 Self {
                     state: AtomicU64::new(0),
                     _data: PhantomData,
                 }
             }
 
-            fn components(&self) -> SlotComponents {
-                let (upper, lower) =
-                    unpack!((self.state.load(Ordering::Acquire)): Self::MAX_CARGO_BIT_WIDTH);
-                SlotComponents {
-                    count: upper,
-                    state: lower,
-                }
+            fn components(&self) -> SlotComponents<Self> {
+                // let (upper, lower) =
+                //     unpack!((self.state.load(Ordering::Acquire)): NON_COUNT_BITS);
+                SlotComponents::new(self.state.load(Ordering::Acquire))
             }
 
             fn cmpxchg(
@@ -84,10 +105,10 @@ cfg_taggedptr64! {
                 new_value: Option<T>,
                 new_count: u64,
             ) -> Result<Option<T>, Option<T>> {
-                let old = pack!((old_count, old_value): Self::MAX_CARGO_BIT_WIDTH);
+                let old = pack!((old_count, old_value): NON_COUNT_BITS);
                 let new_trunc = new_value.map(|v| AsPackedValue::encode(v));
                 let new =
-                    pack!((new_count, new_trunc.map_or(Self::EMPTY_VALUE, |v| v.read())): Self::MAX_CARGO_BIT_WIDTH);
+                    pack!((new_count, new_trunc.map_or(Self::EMPTY_VALUE, |v| v.read() | (1 << (NON_COUNT_BITS - 1)))): NON_COUNT_BITS);
 
                 self.state
                     .compare_exchange(
@@ -97,7 +118,7 @@ cfg_taggedptr64! {
                         core::sync::atomic::Ordering::Relaxed,
                     )
                     .map(|cargo| {
-                        NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(cargo).map(|v| {
+                        NonZeroTruncatedU64::new(cargo).map(|v| {
                             // Safety:
                             // TODO
                             unsafe { AsPackedValue::decode(v) }
@@ -112,8 +133,16 @@ cfg_taggedptr64! {
                     })
             }
 
-            fn is_empty(state: u64) -> bool {
-                state == 0
+            fn is_empty(components: &SlotComponents<Self>) -> bool {
+                components.get_value() >> MAX_CARGO_BIT_WIDTH == 0
+            }
+
+            fn extract_value(value: Self::Storage) -> u64 {
+                unpack!((value): NON_COUNT_BITS).1
+            }
+
+            fn extract_count(value: Self::Storage) -> u64 {
+                unpack!((value): NON_COUNT_BITS).0
             }
         }
 
@@ -121,7 +150,7 @@ cfg_taggedptr64! {
             fn drop(&mut self) {
                 let components = self.components();
                 let _cargo: Option<T> =
-                    NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(components.state).map(|v| {
+                    NonZeroTruncatedU64::new(components.get_value()).map(|v| {
                         // Safety:
                         // TODO
                         unsafe { AsPackedValue::decode(v) }
@@ -154,6 +183,12 @@ cfg_taggedptr128! {
 
         const MAX_CARGO_BIT_WIDTH: usize = 64;
 
+        // this slot stores the item in a tagged U128 value.
+        // `count` takes up the upper 63 bits and `item` takes up the lower 64 bits.
+        // this leaves 1 bit of state, which is used to encode `empty` vs `full`
+        // TODO: this requires, that the state be part of count, which requires different handling of SlotComponents.
+        // Currently: 64 bit count, 64 bit value, not 0 storable
+
         pub struct TaggedPtr128<T: AsPackedValue> {
             storage: AtomicU128,
             _data: PhantomData<T>,
@@ -161,7 +196,7 @@ cfg_taggedptr128! {
 
         impl<T: AsPackedValue> Slot for TaggedPtr128<T> {
             type Item = T;
-
+            type Storage = u128;
             const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
             const EMPTY_VALUE: u64 = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
@@ -173,12 +208,13 @@ cfg_taggedptr128! {
                 }
             }
 
-            fn components(&self) -> SlotComponents {
-                let (upper, lower) = unpack!((self.storage.load(Ordering::Acquire)): 64);
-                SlotComponents {
-                    count: upper as u64,
-                    state: lower as u64,
-                }
+            fn components(&self) -> SlotComponents<Self> {
+                // let (upper, lower) = unpack!((self.storage.load(Ordering::Acquire)): 64);
+                // SlotComponents {
+                //     count: upper as u64,
+                //     state: lower as u64,
+                // }
+                SlotComponents::new(self.storage.load(Ordering::Acquire))
             }
 
             fn cmpxchg(
@@ -200,7 +236,7 @@ cfg_taggedptr128! {
                         core::sync::atomic::Ordering::Relaxed,
                     )
                     .map(|cargo| {
-                        NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(cargo as u64).map(|v| {
+                        NonZeroTruncatedU64::new(cargo as u64).map(|v| {
                             // Safety:
                             // TODO
                             unsafe { AsPackedValue::decode(v) }
@@ -215,8 +251,17 @@ cfg_taggedptr128! {
                     })
             }
 
-            fn is_empty(value: u64) -> bool {
-                value == 0
+            fn is_empty(components: &SlotComponents<Self>) -> bool {
+                (components.get_count() & 1) == 0
+            }
+
+            fn extract_value(value: Self::Storage) -> u64 {
+                // unpack!((value): Self::MAX_CARGO_BIT_WIDTH).1 as u64
+                value as u64
+            }
+
+            fn extract_count(value: Self::Storage) -> u64 {
+                unpack!((value): Self::MAX_CARGO_BIT_WIDTH).0 as u64 >> 1
             }
         }
 
@@ -224,7 +269,7 @@ cfg_taggedptr128! {
             fn drop(&mut self) {
                 let components = self.components();
                 let _cargo: Option<T> =
-                    NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(components.state).map(|v| {
+                    NonZeroTruncatedU64::new(components.get_value()).map(|v| {
                         //Safety:
                         // TODO
                         unsafe { AsPackedValue::decode(v) }

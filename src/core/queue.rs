@@ -57,27 +57,24 @@ where
                 let prev_components = prev_item.components();
                 let current_componets = current_item.components();
 
-                if !B::Slot::is_empty(prev_components.state)
-                    && B::Slot::is_empty(current_componets.state)
-                {
+                if !B::Slot::is_empty(&prev_components) && B::Slot::is_empty(&current_componets) {
                     break prev_components;
                 }
 
                 if !comp(
                     prev_idx,
-                    prev_components.count,
+                    prev_components.get_count(),
                     head,
-                    current_componets.count,
+                    current_componets.get_count(),
                     B::Slot::MAX_W,
                 ) {
-                    if B::Slot::is_empty(prev_components.state)
-                        && B::Slot::is_empty(current_componets.state)
+                    if B::Slot::is_empty(&prev_components) && B::Slot::is_empty(&current_componets)
                     {
                         // empty list
                         break prev_components;
                     }
-                    if !B::Slot::is_empty(prev_components.state)
-                        && !B::Slot::is_empty(current_componets.state)
+                    if !B::Slot::is_empty(&prev_components)
+                        && !B::Slot::is_empty(&current_componets)
                     {
                         // list full
                         return Err(item);
@@ -87,10 +84,10 @@ where
             };
 
             // at this point components is prev(current_component)
-            let mut new_counter = components.count;
-            if B::Slot::is_empty(components.state) {
+            let mut new_counter = components.get_count();
+            if B::Slot::is_empty(&components) {
                 // empty list
-                new_counter = (components.count + B::Slot::MAX_W - 1) % B::Slot::MAX_W;
+                new_counter = (new_counter + B::Slot::MAX_W - 1) % B::Slot::MAX_W;
             }
 
             if head == 0 {
@@ -125,9 +122,9 @@ where
 
             while comp(
                 prev_idx,
-                prev_components.count,
+                prev_components.get_count(),
                 tail,
-                current_components.count,
+                current_components.get_count(),
                 B::Slot::MAX_W,
             ) {
                 prev_idx = tail;
@@ -137,18 +134,16 @@ where
                     (current_components, current_item.components());
             }
 
-            if B::Slot::is_empty(prev_components.state)
-                && B::Slot::is_empty(current_components.state)
-            {
+            if B::Slot::is_empty(&prev_components) && B::Slot::is_empty(&current_components) {
                 // empty queue
                 return None;
             }
 
-            let next_count = (current_components.count + 1) % B::Slot::MAX_W;
+            let next_count = (current_components.get_count() + 1) % B::Slot::MAX_W;
 
             if let Ok(item) = current_item.cmpxchg(
-                current_components.state,
-                current_components.count,
+                current_components.get_value(),
+                current_components.get_count(),
                 None,
                 next_count,
             ) {
@@ -179,7 +174,7 @@ where
                 .get(head)
                 .expect("head outside of cap")
                 .components();
-            if B::Slot::is_empty(components.state) {
+            if B::Slot::is_empty(&components) {
                 // empty
                 0
             } else {
