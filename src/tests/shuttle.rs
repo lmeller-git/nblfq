@@ -1,5 +1,5 @@
 use crate::{
-    MPMCQueue, cfg_taggedptr64,
+    MPMCQueue,
     sync::{
         atomic::{AtomicUsize, Ordering},
         thread,
