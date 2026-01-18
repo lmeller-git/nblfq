@@ -1,9 +1,9 @@
 use crate::core::{AsPackedValue, NonZeroTruncatedU64};
 
-cfg_taggedptr128! {
+cfg_atomic_tagged128! {
     pub use tagged_ptr_u128_portable::*;
 }
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     pub use tagged_ptr64::*;
 }
 
@@ -40,7 +40,7 @@ impl From<(u64, u64)> for SlotComponents {
     }
 }
 
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     mod tagged_ptr64 {
         use core::marker::PhantomData;
 
@@ -50,12 +50,12 @@ cfg_taggedptr64! {
 
         const MAX_CARGO_BIT_WIDTH: usize = 48;
 
-        pub struct TaggedPtr64<T: AsPackedValue> {
+        pub struct Tagged64<T: AsPackedValue> {
             state: AtomicU64,
             _data: PhantomData<T>,
         }
 
-        impl<T: AsPackedValue> Slot for TaggedPtr64<T> {
+        impl<T: AsPackedValue> Slot for Tagged64<T> {
             type Item = T;
             const MAX_W: u64 = u16::MAX as u64 + 1;
             const EMPTY_VALUE: u64 = 0;
@@ -118,7 +118,7 @@ cfg_taggedptr64! {
             }
         }
 
-        impl<T: AsPackedValue> Drop for TaggedPtr64<T> {
+        impl<T: AsPackedValue> Drop for Tagged64<T> {
             fn drop(&mut self) {
                 let components = self.components();
                 let _cargo: Option<T> =
@@ -130,7 +130,7 @@ cfg_taggedptr64! {
             }
         }
 
-        impl<T: AsPackedValue> Default for TaggedPtr64<T> {
+        impl<T: AsPackedValue> Default for Tagged64<T> {
             fn default() -> Self {
                 Self::new()
             }
@@ -138,14 +138,14 @@ cfg_taggedptr64! {
 
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: AsPackedValue + Send> Send for TaggedPtr64<T> {}
+        unsafe impl<T: AsPackedValue + Send> Send for Tagged64<T> {}
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: AsPackedValue + Sync> Sync for TaggedPtr64<T> {}
+        unsafe impl<T: AsPackedValue + Sync> Sync for Tagged64<T> {}
     }
 }
 
-cfg_taggedptr128! {
+cfg_atomic_tagged128! {
     mod tagged_ptr_u128_portable {
         use core::marker::PhantomData;
 
@@ -155,12 +155,12 @@ cfg_taggedptr128! {
 
         const MAX_CARGO_BIT_WIDTH: usize = 64;
 
-        pub struct TaggedPtr128<T: AsPackedValue> {
+        pub struct Tagged128<T: AsPackedValue> {
             storage: AtomicU128,
             _data: PhantomData<T>,
         }
 
-        impl<T: AsPackedValue> Slot for TaggedPtr128<T> {
+        impl<T: AsPackedValue> Slot for Tagged128<T> {
             type Item = T;
 
             const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
@@ -222,7 +222,7 @@ cfg_taggedptr128! {
             }
         }
 
-        impl<T: AsPackedValue> Drop for TaggedPtr128<T> {
+        impl<T: AsPackedValue> Drop for Tagged128<T> {
             fn drop(&mut self) {
                 let components = self.components();
                 let _cargo: Option<T> =
@@ -234,7 +234,7 @@ cfg_taggedptr128! {
             }
         }
 
-        impl<T: AsPackedValue> Default for TaggedPtr128<T> {
+        impl<T: AsPackedValue> Default for Tagged128<T> {
             fn default() -> Self {
                 Self::new()
             }
@@ -242,10 +242,10 @@ cfg_taggedptr128! {
 
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: AsPackedValue + Send> Send for TaggedPtr128<T> {}
+        unsafe impl<T: AsPackedValue + Send> Send for Tagged128<T> {}
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: AsPackedValue + Sync> Sync for TaggedPtr128<T> {}
+        unsafe impl<T: AsPackedValue + Sync> Sync for Tagged128<T> {}
     }
 }
 
