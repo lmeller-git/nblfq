@@ -97,7 +97,7 @@ cfg_taggedptr64! {
                         core::sync::atomic::Ordering::Relaxed,
                     )
                     .map(|cargo| {
-                        NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(cargo).map(|v| {
+                        NonZeroTruncatedU64::new(cargo).map(|v| {
                             // Safety:
                             // TODO
                             unsafe { AsPackedValue::decode(v) }
@@ -121,7 +121,7 @@ cfg_taggedptr64! {
             fn drop(&mut self) {
                 let components = self.components();
                 let _cargo: Option<T> =
-                    NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(components.state).map(|v| {
+                    NonZeroTruncatedU64::new(components.state).map(|v| {
                         // Safety:
                         // TODO
                         unsafe { AsPackedValue::decode(v) }
@@ -200,7 +200,7 @@ cfg_taggedptr128! {
                         core::sync::atomic::Ordering::Relaxed,
                     )
                     .map(|cargo| {
-                        NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(cargo as u64).map(|v| {
+                        NonZeroTruncatedU64::new(cargo as u64).map(|v| {
                             // Safety:
                             // TODO
                             unsafe { AsPackedValue::decode(v) }
@@ -224,7 +224,7 @@ cfg_taggedptr128! {
             fn drop(&mut self) {
                 let components = self.components();
                 let _cargo: Option<T> =
-                    NonZeroTruncatedU64::new::<MAX_CARGO_BIT_WIDTH>(components.state).map(|v| {
+                    NonZeroTruncatedU64::new(components.state).map(|v| {
                         //Safety:
                         // TODO
                         unsafe { AsPackedValue::decode(v) }

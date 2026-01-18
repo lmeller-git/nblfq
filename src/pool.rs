@@ -188,11 +188,11 @@ impl<T> Add<usize> for ItemHandle<T> {
 unsafe impl<T> AsPackedValue for ItemHandle<T> {
     const MIN_BIT_WIDTH: usize = 48;
 
-    fn encode(zelf: Self) -> crate::core::NonZeroTruncatedU64 {
-        NonZeroTruncatedU64::new::<48>(zelf.idx() as u64).unwrap()
+    fn encode(zelf: Self) -> crate::core::NonZeroTruncatedU64<Self> {
+        NonZeroTruncatedU64::new(zelf.idx() as u64).unwrap()
     }
 
-    unsafe fn decode(raw: crate::core::NonZeroTruncatedU64) -> Self {
+    unsafe fn decode(raw: crate::core::NonZeroTruncatedU64<Self>) -> Self {
         Self::new(OwnedIdx::new(raw.read() as usize))
     }
 }
