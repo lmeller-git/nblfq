@@ -62,6 +62,7 @@ cfg_taggedptr64! {
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
             fn new() -> Self {
+                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH, "the stored item must be representable with 48 or less bits") };
                 Self {
                     state: AtomicU64::new(0),
                     _data: PhantomData,
@@ -167,6 +168,7 @@ cfg_taggedptr128! {
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
             fn new() -> Self {
+                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH, "the stored item must be representable with 64 or less bits") };
                 Self {
                     storage: AtomicU128::new(0),
                     _data: PhantomData,
