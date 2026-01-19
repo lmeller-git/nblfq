@@ -1,4 +1,4 @@
-use crate::{MPMCQueue, cfg_taggedptr64, cfg_taggedptr128};
+use crate::MPMCQueue;
 
 use crate::sync::{Arc, thread};
 
@@ -7,7 +7,7 @@ use crate::sync::{Arc, thread};
 // way to small i think
 pub(crate) fn linearizable<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static i32> + Sync + 'static,
+    Q: MPMCQueue<Item = u32> + Sync + 'static,
 {
     const COUNT: usize = 1;
     const THREADS: usize = 2;
@@ -19,7 +19,7 @@ where
         let q2 = q.clone();
         threads.push(thread::spawn(move || {
             for _ in 0..COUNT {
-                while q2.push(&0).is_err() {}
+                while q2.push(42).is_err() {}
                 thread::yield_now();
                 q2.pop().unwrap();
             }
@@ -28,7 +28,7 @@ where
         let q = q.clone();
         threads.push(thread::spawn(move || {
             for _ in 0..COUNT {
-                if q.force_push(&0).is_none() {
+                if q.force_push(42).is_none() {
                     q.pop().unwrap();
                 }
             }
@@ -40,32 +40,32 @@ where
     }
 }
 
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     mod taggedptr64 {
-        use crate::{Queue, core::slots::TaggedPtr64};
+        use crate::{Queue, core::slots::Tagged64};
 
         use super::*;
 
         #[test]
         fn linearizable_impl() {
             loom::model(|| {
-                let q = Queue::with_slot::<TaggedPtr64>(4);
+                let q = Queue::with_slot::<Tagged64>(4);
                 linearizable(q);
             });
         }
     }
 }
 
-cfg_taggedptr128! {
+cfg_atomic_tagged128! {
     mod taggedptr128 {
-        use crate::{Queue, core::slots::TaggedPtr128};
+        use crate::{Queue, core::slots::Tagged128};
 
         use super::*;
 
         #[test]
         fn linearizable_impl() {
             loom::model(|| {
-                let q = Queue::with_slot::<TaggedPtr128>(2);
+                let q = Queue::with_slot::<Tagged128>(2);
                 linearizable(q);
                 drop(q)
             });

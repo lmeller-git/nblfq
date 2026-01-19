@@ -1,104 +1,23 @@
-use crate::{cfg_taggedptr64, cfg_taggedptr128};
-use ::core::ptr::NonNull;
+use crate::core::{AsPackedValue, NonZeroTruncatedU64};
 
-cfg_taggedptr128! {
+cfg_atomic_tagged128! {
     pub use tagged_ptr_u128_portable::*;
 }
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     pub use tagged_ptr64::*;
-}
-
-/// This trait allows the type to be stored in a TaggedPtr.
-/// Consider using a pooled queue, instead of implementing this trait for your pointer, if performance cost are acceptable.
-/// # Safety
-/// - Since `PtrLike::as_ptr` and `PtrLike::from_raw` may be called during any queue operation, both must be atomic and wait-free.
-/// - `PtrLike::as_ptr` should never return a nullptr, as the nullptr is reserved for empty slots.
-/// - `TaggedPtr64` will truncate the ptr handed out from `PtrLike::as_ptr` to 48 bits and later call `PtrLike::from_ptr` on the sign extended version of this, thus your pointer must fit into 48 bits.
-/// - The ptr handed out in `PtrLike::as_ptr` must be stable for at least as long it is stored in the queue, i.e. the queues lifetime
-/// - The ptr will never be dereferenced by the queue and may thus have any nonnull value
-pub unsafe trait PtrLike: Sized {
-    /// The pointee of this type.
-    type Item;
-    /// transforms `Self` into a `NonNull`.
-    /// The caller is responsible for calling PtrLike::from_raw exactly once at some point on the returned value.
-    /// This method should never block
-    fn as_ptr(zelf: Self) -> NonNull<Self::Item>;
-    /// transforms a `NonNull` into `Self`.
-    /// This method should only be used on ptrs obtained from PtrLike::as_ptr.
-    /// This method should never block
-    fn from_raw(raw: NonNull<Self::Item>) -> Self;
-}
-
-// SAFETY:
-// the caller must guarantee that:
-// - the ptr will never be null, while stored in the queue
-unsafe impl<T> PtrLike for *const T {
-    type Item = T;
-    fn as_ptr(zelf: Self) -> NonNull<T> {
-        NonNull::new(zelf as *mut T).expect("tried to store a nullptr in queue. This is UB")
-    }
-
-    fn from_raw(raw: NonNull<Self::Item>) -> Self {
-        raw.as_ptr()
-    }
-}
-
-// SAFETY:
-// the caller must guarantee that:
-// - the ptr will never be null, while stored in the queue
-unsafe impl<T> PtrLike for *mut T {
-    type Item = T;
-    fn as_ptr(zelf: Self) -> NonNull<T> {
-        NonNull::new(zelf).expect("tried to store a nullptr in queue. This is UB")
-    }
-
-    fn from_raw(raw: NonNull<Self::Item>) -> Self {
-        raw.as_ptr()
-    }
-}
-
-// SAFETY:
-// this is a no-op
-unsafe impl<T> PtrLike for NonNull<T> {
-    type Item = T;
-    fn as_ptr(zelf: Self) -> NonNull<Self::Item> {
-        zelf
-    }
-
-    fn from_raw(raw: NonNull<Self::Item>) -> Self {
-        raw
-    }
-}
-
-// SAFETY:
-// A static reference is guaranteed to be nonnull and will live for the programs lifetime
-unsafe impl<T> PtrLike for &'static T {
-    type Item = T;
-    fn as_ptr(zelf: Self) -> NonNull<T> {
-        NonNull::from_ref(zelf)
-    }
-
-    fn from_raw(raw: NonNull<T>) -> Self {
-        // SAFETY:
-        // the reference is always nonnull and valid for 'static.
-        // the caller must guarantee that raw was obtained from `as_ptr` on this reference and not modified afterwards
-        unsafe { raw.as_ref() }
-    }
 }
 
 pub(crate) trait Slot: Default {
     type Item;
-    // TODO do some validation that PtrLike fits into this
-    #[allow(unused)]
-    const MAX_BITS: usize;
     const MAX_W: u64;
-    const EMPTY_PTR: *const Self::Item;
+    const EMPTY_VALUE: u64;
+    const MAX_CARGO_BIT_WIDTH: usize;
 
     fn new() -> Self;
     fn components(&self) -> SlotComponents;
     fn cmpxchg(
         &self,
-        old_ptr: *const Self::Item,
+        old_value: u64,
         old_count: u64,
         item: Option<Self::Item>,
         new_count: u64,
@@ -121,88 +40,97 @@ impl From<(u64, u64)> for SlotComponents {
     }
 }
 
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     mod tagged_ptr64 {
-        use core::{
-            marker::PhantomData,
-            ptr::{null, null_mut},
-        };
+        use core::marker::PhantomData;
 
-        use crate::{
-            sync::atomic::{AtomicU64, Ordering},
-            utils::{components_as_tagged, components_from_tagged},
-        };
+        use crate::sync::atomic::{AtomicU64, Ordering};
 
         use super::*;
 
-        pub struct TaggedPtr64<T: PtrLike> {
-            ptr: AtomicU64,
+        const MAX_CARGO_BIT_WIDTH: usize = 48;
+
+        pub struct Tagged64<T: AsPackedValue> {
+            state: AtomicU64,
             _data: PhantomData<T>,
         }
 
-        impl<T: PtrLike> Slot for TaggedPtr64<T> {
+        impl<T: AsPackedValue> Slot for Tagged64<T> {
             type Item = T;
-            const MAX_BITS: usize = 48;
             const MAX_W: u64 = u16::MAX as u64 + 1;
-            const EMPTY_PTR: *const Self::Item = null();
+            const EMPTY_VALUE: u64 = 0;
+            const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
             fn new() -> Self {
+                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH, "the stored item must be representable with 48 or less bits") };
                 Self {
-                    ptr: AtomicU64::new(0),
+                    state: AtomicU64::new(0),
                     _data: PhantomData,
                 }
             }
 
             fn components(&self) -> SlotComponents {
-                let (c, p) = components_from_tagged::<T::Item>(self.ptr.load(Ordering::Acquire));
-                (c, p as u64).into()
+                let (upper, lower) =
+                    unpack!((self.state.load(Ordering::Acquire)): Self::MAX_CARGO_BIT_WIDTH);
+                SlotComponents {
+                    count: upper,
+                    state: lower,
+                }
             }
 
             fn cmpxchg(
                 &self,
-                old_ptr: *const T,
+                old_value: u64,
                 old_count: u64,
-                new_ptr: Option<T>,
+                new_value: Option<T>,
                 new_count: u64,
             ) -> Result<Option<T>, Option<T>> {
-                let new_ptr_ = new_ptr.map_or(null_mut(), |p| PtrLike::as_ptr(p).as_ptr());
-                let new_state = components_as_tagged(new_count, new_ptr_);
-                let old_state = components_as_tagged(old_count, old_ptr);
-                match self.ptr.compare_exchange(
-                    old_state,
-                    new_state,
-                    Ordering::AcqRel,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(v) => {
-                        let nonnull =
-                            NonNull::new(components_from_tagged::<T::Item>(v).1 as *mut T::Item);
-                        Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
-                    }
-                    Err(_) => {
-                        let nonnull = NonNull::new(
-                            components_from_tagged::<T::Item>(new_ptr_ as u64).1 as *mut T::Item,
-                        );
-                        Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
-                    }
-                }
+                let old = pack!((old_count, old_value): Self::MAX_CARGO_BIT_WIDTH);
+                let new_trunc = new_value.map(|v| AsPackedValue::encode(v));
+                let new =
+                    pack!((new_count, new_trunc.map_or(Self::EMPTY_VALUE, |v| v.read())): Self::MAX_CARGO_BIT_WIDTH);
+
+                self.state
+                    .compare_exchange(
+                        old,
+                        new,
+                        core::sync::atomic::Ordering::AcqRel,
+                        core::sync::atomic::Ordering::Relaxed,
+                    )
+                    .map(|cargo| {
+                        NonZeroTruncatedU64::new(cargo).map(|v| {
+                            // Safety:
+                            // TODO
+                            unsafe { AsPackedValue::decode(v) }
+                        })
+                    })
+                    .map_err(|_| {
+                        new_trunc.map(|v| {
+                            // Safety:
+                            // TODO
+                            unsafe { AsPackedValue::decode(v) }
+                        })
+                    })
             }
 
-            fn is_empty(ptr: u64) -> bool {
-                (ptr as *const T::Item).is_null()
+            fn is_empty(state: u64) -> bool {
+                state == 0
             }
         }
 
-        impl<T: PtrLike> Drop for TaggedPtr64<T> {
+        impl<T: AsPackedValue> Drop for Tagged64<T> {
             fn drop(&mut self) {
                 let components = self.components();
-                if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
-                    let _ptr = T::from_raw(ptr);
-                }
+                let _cargo: Option<T> =
+                    NonZeroTruncatedU64::new(components.state).map(|v| {
+                        // Safety:
+                        // TODO
+                        unsafe { AsPackedValue::decode(v) }
+                    });
             }
         }
 
-        impl<T: PtrLike> Default for TaggedPtr64<T> {
+        impl<T: AsPackedValue> Default for Tagged64<T> {
             fn default() -> Self {
                 Self::new()
             }
@@ -210,99 +138,103 @@ cfg_taggedptr64! {
 
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: PtrLike + Send> Send for TaggedPtr64<T> {}
+        unsafe impl<T: AsPackedValue + Send> Send for Tagged64<T> {}
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr64<T> {}
+        unsafe impl<T: AsPackedValue + Sync> Sync for Tagged64<T> {}
     }
 }
 
-cfg_taggedptr128! {
+cfg_atomic_tagged128! {
     mod tagged_ptr_u128_portable {
-        use core::{
-            marker::PhantomData,
-            ptr::{null, null_mut},
-        };
+        use core::marker::PhantomData;
 
-        use crate::{
-            sync::atomic::{AtomicU128, Ordering},
-            utils::{components_as_u128, components_from_u128},
-        };
+        use crate::sync::atomic::{AtomicU128, Ordering};
 
         use super::*;
 
-        pub struct TaggedPtr128<T: PtrLike> {
+        const MAX_CARGO_BIT_WIDTH: usize = 64;
+
+        pub struct Tagged128<T: AsPackedValue> {
             storage: AtomicU128,
             _data: PhantomData<T>,
         }
 
-        impl<T: PtrLike> TaggedPtr128<T> {
-            pub(crate) fn from_u128(value: u128) -> Self {
+        impl<T: AsPackedValue> Slot for Tagged128<T> {
+            type Item = T;
+
+            const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
+            const EMPTY_VALUE: u64 = 0;
+            const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
+
+            fn new() -> Self {
+                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH, "the stored item must be representable with 64 or less bits") };
                 Self {
-                    storage: AtomicU128::new(value),
+                    storage: AtomicU128::new(0),
                     _data: PhantomData,
                 }
             }
-        }
-
-        impl<T: PtrLike> Slot for TaggedPtr128<T> {
-            type Item = T;
-            const MAX_BITS: usize = 64; // techincally we could use more here, as the counter does not use the full 64 bits currently
-            const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
-            const EMPTY_PTR: *const Self::Item = null();
-
-            fn new() -> Self {
-                Self::from_u128(0)
-            }
 
             fn components(&self) -> SlotComponents {
-                let (c, p) = components_from_u128::<T::Item>(self.storage.load(Ordering::Acquire));
-                (c, p as u64).into()
+                let (upper, lower) = unpack!((self.storage.load(Ordering::Acquire)): 64);
+                SlotComponents {
+                    count: upper as u64,
+                    state: lower as u64,
+                }
             }
 
             fn cmpxchg(
                 &self,
-                old_ptr: *const Self::Item,
+                old_value: u64,
                 old_count: u64,
                 item: Option<Self::Item>,
                 new_count: u64,
             ) -> Result<Option<Self::Item>, Option<Self::Item>> {
-                let new_ptr = item.map_or(null_mut(), |ptr| PtrLike::as_ptr(ptr).as_ptr());
-                let old = components_as_u128(old_count, old_ptr);
-                let new = components_as_u128(new_count, new_ptr);
-                match self
-                    .storage
-                    .compare_exchange(old, new, Ordering::AcqRel, Ordering::Relaxed)
-                {
-                    Ok(v) => {
-                        let nonnull =
-                            NonNull::new(components_from_u128::<T::Item>(v).1 as *mut T::Item);
-                        Ok(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
-                    }
-                    Err(_) => {
-                        let nonnull = NonNull::new(
-                            components_from_u128::<T::Item>(new_ptr as u128).1 as *mut T::Item,
-                        );
-                        Err(nonnull.map(|ptr| PtrLike::from_raw(ptr)))
-                    }
-                }
+                let old = pack!((old_count as u128, old_value as u128): 64);
+                let new_trunc = item.map(|v| AsPackedValue::encode(v));
+                let new = pack!((new_count as u128, new_trunc.map_or(0, |v| v.read()) as u128): 64);
+
+                self.storage
+                    .compare_exchange(
+                        old,
+                        new,
+                        core::sync::atomic::Ordering::AcqRel,
+                        core::sync::atomic::Ordering::Relaxed,
+                    )
+                    .map(|cargo| {
+                        NonZeroTruncatedU64::new(cargo as u64).map(|v| {
+                            // Safety:
+                            // TODO
+                            unsafe { AsPackedValue::decode(v) }
+                        })
+                    })
+                    .map_err(|_| {
+                        new_trunc.map(|v| {
+                            // Safety:
+                            // TODO
+                            unsafe { AsPackedValue::decode(v) }
+                        })
+                    })
             }
 
-            fn is_empty(ptr: u64) -> bool {
-                (ptr as *const T::Item).is_null()
+            fn is_empty(value: u64) -> bool {
+                value == 0
             }
         }
 
-        impl<T: PtrLike> Drop for TaggedPtr128<T> {
+        impl<T: AsPackedValue> Drop for Tagged128<T> {
             fn drop(&mut self) {
                 let components = self.components();
-                if let Some(ptr) = NonNull::new(components.state as *mut T::Item) {
-                    let _ptr = T::from_raw(ptr);
-                }
+                let _cargo: Option<T> =
+                    NonZeroTruncatedU64::new(components.state).map(|v| {
+                        //Safety:
+                        // TODO
+                        unsafe { AsPackedValue::decode(v) }
+                    });
             }
         }
 
-        impl<T: PtrLike> Default for TaggedPtr128<T> {
+        impl<T: AsPackedValue> Default for Tagged128<T> {
             fn default() -> Self {
                 Self::new()
             }
@@ -310,10 +242,10 @@ cfg_taggedptr128! {
 
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: PtrLike + Send> Send for TaggedPtr128<T> {}
+        unsafe impl<T: AsPackedValue + Send> Send for Tagged128<T> {}
         // SAFETY:
         // TaggedPtr<T> is essentially a version of a type implementing PtrLike. It should have the same Send + Sync.
-        unsafe impl<T: PtrLike + Sync> Sync for TaggedPtr128<T> {}
+        unsafe impl<T: AsPackedValue + Sync> Sync for Tagged128<T> {}
     }
 }
 

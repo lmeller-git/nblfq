@@ -1,5 +1,5 @@
 use crate::{
-    MPMCQueue, cfg_taggedptr64,
+    MPMCQueue,
     sync::{
         atomic::{AtomicUsize, Ordering},
         thread,
@@ -10,7 +10,7 @@ use crate::{
 
 pub(crate) fn spsc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     const COUNT: usize = 50;
 
@@ -19,7 +19,7 @@ where
             for i in 0..COUNT {
                 loop {
                     if let Some(x) = q.pop() {
-                        assert_eq!(*x, i);
+                        assert_eq!(x, i as u32);
                         break;
                     }
                 }
@@ -29,7 +29,7 @@ where
 
         scope.spawn(|| {
             for i in 0..COUNT {
-                while q.push(Box::new(i)).is_err() {}
+                while q.push(i as u32).is_err() {}
             }
         });
     })
@@ -37,7 +37,7 @@ where
 
 pub(crate) fn mpsc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     const COUNT: usize = 20;
     const THREADS: usize = 4;
@@ -48,7 +48,7 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(Box::new(i)).is_err() {}
+                    while q.push(i as u32).is_err() {}
                 }
             });
         }
@@ -59,7 +59,7 @@ where
                         break x;
                     }
                 };
-                v[*n].fetch_add(1, Ordering::SeqCst);
+                v[n as usize].fetch_add(1, Ordering::SeqCst);
             }
         }
     });
@@ -71,7 +71,7 @@ where
 
 pub(crate) fn mpmc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     const COUNT: usize = 20;
     const THREADS: usize = 4;
@@ -86,14 +86,14 @@ where
                             break x;
                         }
                     };
-                    v[*n].fetch_add(1, Ordering::SeqCst);
+                    v[n as usize].fetch_add(1, Ordering::SeqCst);
                 }
             });
         }
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(Box::new(i)).is_err() {}
+                    while q.push(i as u32).is_err() {}
                 }
             });
         }
@@ -106,7 +106,7 @@ where
 
 pub(crate) fn mpmc_ring_buffer<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     const COUNT: usize = 20;
     const THREADS: usize = 2;
@@ -121,14 +121,14 @@ where
                     match t.load(Ordering::SeqCst) {
                         0 => {
                             while let Some(n) = q.pop() {
-                                v[*n].fetch_add(1, Ordering::SeqCst);
+                                v[n as usize].fetch_add(1, Ordering::SeqCst);
                             }
                             break;
                         }
 
                         _ => {
                             while let Some(n) = q.pop() {
-                                v[*n].fetch_add(1, Ordering::SeqCst);
+                                v[n as usize].fetch_add(1, Ordering::SeqCst);
                             }
                             crate::utils::Backoff::new().backoff();
                         }
@@ -140,8 +140,8 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    q.force_push_and_do(Box::new(i), |n| {
-                        v[*n].fetch_add(1, Ordering::SeqCst);
+                    q.force_push_and_do(i as u32, |n| {
+                        v[n as usize].fetch_add(1, Ordering::SeqCst);
                     });
                 }
 
@@ -157,7 +157,7 @@ where
 
 pub(crate) fn linearizable<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static i32> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     const COUNT: usize = 50;
     const THREADS: usize = 4;
@@ -166,14 +166,14 @@ where
         for _ in 0..THREADS / 2 {
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    while q.push(&0).is_err() {}
+                    while q.push(42).is_err() {}
                     q.pop().unwrap();
                 }
             });
 
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    if q.force_push(&0).is_none() {
+                    if q.force_push(42).is_none() {
                         q.pop().unwrap();
                     }
                 }
@@ -182,9 +182,9 @@ where
     })
 }
 
-cfg_taggedptr64! {
+cfg_atomic_tagged64! {
     mod taggedptr64 {
-        use crate::{Queue, core::slots::TaggedPtr64};
+        use crate::{Queue, core::slots::Tagged64};
 
         use super::*;
 
@@ -192,7 +192,70 @@ cfg_taggedptr64! {
         fn spsc_impl() {
             shuttle::check_random(
                 || {
-                    let q = Queue::with_slot::<TaggedPtr64>(3);
+                    let q = Queue::with_slot::<Tagged64>(3);
+                    spsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = Queue::with_slot::<Tagged64>(3);
+                    mpmc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_ring_buffer_impl() {
+            shuttle::check_random(
+                || {
+                    let q = Queue::with_slot::<Tagged64>(3);
+                    mpmc_ring_buffer(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = Queue::with_slot::<Tagged64>(3);
+                    mpsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn linearizable_impl() {
+            shuttle::check_random(
+                || {
+                    let q = Queue::with_slot::<Tagged64>(4);
+                    linearizable(q);
+                },
+                100,
+            );
+        }
+    }
+}
+
+cfg_atomic_tagged128! {
+    mod taggedptr128 {
+        use crate::{Queue, core::slots::Tagged128};
+
+        use super::*;
+
+        #[test]
+        fn spsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = Queue::with_slot::<Tagged128>(3);
                     spsc(q);
                 },
                 100,
@@ -214,7 +277,7 @@ cfg_taggedptr64! {
         fn mpmc_ring_buffer_impl() {
             shuttle::check_random(
                 || {
-                    let q = Queue::with_slot::<TaggedPtr64>(3);
+                    let q = Queue::with_slot::<Tagged128>(3);
                     mpmc_ring_buffer(q);
                 },
                 100,
@@ -225,7 +288,7 @@ cfg_taggedptr64! {
         fn mpsc_impl() {
             shuttle::check_random(
                 || {
-                    let q = Queue::with_slot::<TaggedPtr64>(3);
+                    let q = Queue::with_slot::<Tagged128>(3);
                     mpsc(q);
                 },
                 100,
@@ -236,7 +299,7 @@ cfg_taggedptr64! {
         fn linearizable_impl() {
             shuttle::check_random(
                 || {
-                    let q = Queue::with_slot::<TaggedPtr64>(4);
+                    let q = Queue::with_slot::<Tagged128>(4);
                     linearizable(q);
                 },
                 100,

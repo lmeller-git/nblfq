@@ -62,7 +62,8 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 ## Choosing a queue type
 
-`StaticQueue` and `Queue` may only store ptrs and are optimized for this use case.
+`StaticQueue` and `Queue` may only store small values and are optimized for this use case.
+
 `PooledStaticQueue` and `PooledQueue` may store arbitrary types, at the cost of higher memory usage and runtime cost.
 
 

@@ -1,15 +1,15 @@
-/// cfg that disables TaggedPtr64 based on architecture and feature flags.
+/// cfg that disables Tagged64 slot based on architecture and feature flags.
 ///
 /// Usage:
 /// ```rust
-/// use nblf_queue::cfg_taggedptr64;
+/// use nblf_queue::cfg_atomic_tagged64;
 ///
-/// cfg_taggedptr64! {
-///     use nblf_queue::core::slots::TaggedPtr64;
+/// cfg_atomic_tagged64! {
+///     use nblf_queue::core::slots::Tagged64;
 /// }
 /// ```
 #[macro_export]
-macro_rules! cfg_taggedptr64 {
+macro_rules! cfg_atomic_tagged64 {
     ($($item:item)*) => {
        $(
            #[cfg(any(target_has_atomic = "64", feature = "atomic-fallback"))]
@@ -18,35 +18,24 @@ macro_rules! cfg_taggedptr64 {
     };
 }
 
-/// cfg that disables TaggedPtr128 based on architecture and feature flags.
+/// cfg that disables Tagged128 slot based on architecture and feature flags.
 ///
 /// Usage:
 /// ```rust
-/// use nblf_queue::cfg_taggedptr128;
+/// use nblf_queue::cfg_atomic_tagged128;
 ///
-/// cfg_taggedptr128! {
-///     use nblf_queue::core::slots::TaggedPtr128;
+/// cfg_atomic_tagged128! {
+///     use nblf_queue::core::slots::Tagged128;
 /// }
 /// ```
 #[macro_export]
-macro_rules! cfg_taggedptr128 {
+macro_rules! cfg_atomic_tagged128 {
     ($($item:item)*) => {
         $(
-            #[cfg(any(target_has_atomic = "128", all(feature = "atomic-fallback", not(loom))))]
+            #[cfg(any(target_has_atomic = "128", all(feature = "atomic-fallback", not(loom), not(shuttle))))]
             $item
         )*
     };
-}
-
-cfg_taggedptr128! {
-    pub(crate) use dword::*;
-}
-// num_components is only cfg guarded, because taggedptr64 is the only code calling it
-cfg_taggedptr64! {
-    pub(crate) use num_components::*;
-}
-cfg_taggedptr64! {
-    pub(crate) use tagged::*;
 }
 
 pub(crate) use sealed::Sealed;
@@ -97,62 +86,39 @@ pub(crate) mod sealed {
     pub trait Sealed {}
 }
 
-cfg_taggedptr128! {
-    mod dword {
-        // dword ptr 128bit:
-        // |----64 bit----|----64 bit----|
-        //       count    |     ptr
-
-        pub(crate) fn components_as_u128<T>(count: u64, ptr: *const T) -> u128 {
-            ((count as u128) << 64) | (ptr as usize as u128)
-        }
-
-        pub(crate) fn components_from_u128<T>(dword: u128) -> (u64, *const T) {
-            let count = (dword >> 64) as u64;
-            let ptr = dword as usize as *const T;
-            (count, ptr)
-        }
-    }
+// Safety:
+// width here is the bit-width taken up by the lower value
+// we assume that lower is already properly truncated
+macro_rules! pack {
+    (($upper:expr, $lower:expr): $width:expr) => {
+        (($upper) << $width) | ($lower)
+    };
 }
 
-cfg_taggedptr64! {
-    mod num_components {
-        // tagged ptr 64bit:
-        // |--16 bit--|----48 bit----|
-        //    count   |     ptr
-        pub(crate) fn components_as_num(count: u64, state: u64) -> u64 {
-            debug_assert!(count <= u16::MAX as u64, "Count too large for 16-bit field");
-            let ptr_non_extended = state & ((1u64 << 48) - 1);
-            (count << 48) | ptr_non_extended
-        }
-
-        pub(crate) fn components_from_num(state: u64) -> (u64, u64) {
-            let count = state >> 48;
-            let ptr_mask = (1u64 << 48) - 1;
-            let raw_ptr = state & ptr_mask;
-            (count, raw_ptr)
-        }
-    }
+// Safety:
+// width is the bit-width taken up by the lower value
+// the value as produced by pack!() with the correct parameters
+macro_rules! unpack {
+    (($packed:expr): $width:expr) => {{
+        // make sure to evaluate passed exprs only once
+        let width = $width;
+        let packed_value = $packed;
+        let upper = packed_value >> width;
+        let lower = packed_value & ((1 << width) - 1);
+        (upper, lower)
+    }};
 }
 
-cfg_taggedptr64! {
-    mod tagged {
-        pub(crate) fn components_as_tagged<T>(count: u64, ptr: *const T) -> u64 {
-            super::components_as_num(count, ptr as u64)
-        }
+#[cfg(test)]
+pub(crate) fn sign_erase(ptr: u64) -> u64 {
+    ptr & ((1u64 << 48) - 1)
+}
 
-        pub(crate) fn components_from_tagged<T>(ptr: u64) -> (u64, *const T) {
-            let (count, raw_ptr) = super::components_from_num(ptr);
-            (count, sign_extend(raw_ptr) as *const T)
-        }
-
-        fn sign_extend(ptr: u64) -> u64 {
-            if ptr & (1u64 << 47) != 0 {
-                ptr | (!((1u64 << 48) - 1))
-            } else {
-                ptr
-            }
-        }
+pub(crate) fn sign_extend(ptr: u64) -> u64 {
+    if ptr & (1u64 << 47) != 0 {
+        ptr | (!((1u64 << 48) - 1))
+    } else {
+        ptr
     }
 }
 
@@ -160,130 +126,130 @@ cfg_taggedptr64! {
 mod tests {
     use super::*;
 
-    cfg_taggedptr64! {
-        mod tagged_ptr {
-            use core::ptr::null;
+    mod tagged_ptr {
+        use core::ptr::null;
 
-            use super::*;
+        use super::{sign_erase, sign_extend};
 
-            #[test]
-            fn into_tagged() {
-                let ptr = u64::MAX as *const u8;
-                let count = 0xDEAD;
-                let res = components_as_tagged(count, ptr);
-                assert_eq!(res, 0xDEAD_FFFF_FFFF_FFFF);
+        #[test]
+        fn into_tagged() {
+            let ptr = u64::MAX as *const u8;
+            let count = 0xDEAD;
+            let res = pack!((count, sign_erase(ptr as u64)): 48);
+            assert_eq!(res, 0xDEAD_FFFF_FFFF_FFFF);
 
-                let ptr2 = 0xDEAD_BEEF as *const u8;
-                let res = components_as_tagged(count, ptr2);
-                assert_eq!(res, 0xDEAD_0000_DEAD_BEEF);
+            let ptr2 = 0xDEAD_BEEF as *const u8;
+            let res = pack!((count, sign_erase(ptr2 as u64)): 48);
+            assert_eq!(res, 0xDEAD_0000_DEAD_BEEF);
 
-                let ptr: *const u8 = null();
-                assert_eq!(components_as_tagged(0, ptr), 0);
-            }
+            let ptr: *const u8 = null();
+            assert_eq!(pack!((0, ptr as u64): 48), 0);
+        }
 
-            #[test]
-            fn from_tagged() {
-                let ptr = u64::MAX as *const u8;
-                let count = 0xDEAD;
-                let res = 0xDEAD_FFFF_FFFF_FFFF;
+        #[test]
+        fn from_tagged() {
+            let ptr = u64::MAX as *const u8;
+            let count = 0xDEAD;
+            let res = 0xDEAD_FFFF_FFFF_FFFF;
 
-                assert_eq!(components_from_tagged(res), (count, ptr));
+            let (v1, v2) = unpack!((res): 48);
 
-                let ptr2 = 0xDEAD_BEEF as *const u8;
-                let res = 0xDEAD_0000_DEAD_BEEF;
+            assert_eq!((v1, sign_extend(v2)), (count, ptr as u64));
 
-                assert_eq!(components_from_tagged(res), (count, ptr2));
+            let ptr2 = 0xDEAD_BEEF as *const u8;
+            let res = 0xDEAD_0000_DEAD_BEEF;
 
-                let ptr: *const u8 = null();
-                assert_eq!(components_from_tagged(0), (0, ptr))
-            }
+            let (v1, v2) = unpack!((res): 48);
 
-            #[test]
-            fn tagged() {
-                let ptr = u64::MAX as *const u8;
-                let ptr2 = 0xDEAD_BEEF as *const u8;
-                let count = 0xDEAD;
+            assert_eq!((v1, sign_extend(v2)), (count, ptr2 as u64));
 
-                assert_eq!(
-                    components_from_tagged(components_as_tagged(count, ptr)),
-                    (count, ptr)
-                );
-                assert_eq!(
-                    components_from_tagged(components_as_tagged(count, ptr2)),
-                    (count, ptr2)
-                );
+            let ptr: *const u8 = null();
+            assert_eq!(unpack!((0_u64): 48), (0, ptr as u64))
+        }
 
-                let data = &4242;
-                let count = 42;
-                let ptr = components_as_tagged(count, data as *const i32);
-                let (count_, data_): (_, *const i32) = components_from_tagged(ptr);
-                assert_eq!(count, count_);
-                // SAFETY:
-                // ptr to data or data was not modified, if components_as_tagged + from_tagged work as intended
-                assert_eq!(*data, unsafe { *data_ });
-            }
+        #[test]
+        fn tagged() {
+            let ptr = u64::MAX as *const u8;
+            let ptr2 = 0xDEAD_BEEF as *const u8;
+            let count = 0xDEAD;
+
+            let (v1, v2) = unpack!((pack!((count, sign_erase(ptr as u64)): 48)): 48);
+
+            assert_eq!((v1, sign_extend(v2)), (count, ptr as u64));
+
+            let (v1, v2) = unpack!((pack!((count, sign_erase(ptr2 as u64)): 48)): 48);
+
+            assert_eq!((v1, sign_extend(v2)), (count, ptr2 as u64));
+
+            let data = &4242;
+            let count = 42;
+            let ptr = pack!((count, data as *const i32 as u64): 48);
+            let (count_, data_): (_, u64) = unpack!((ptr): 48);
+            assert_eq!(count, count_);
+            // SAFETY:
+            // ptr to data or data was not modified, if components_as_tagged + from_tagged work as intended
+            assert_eq!(*data, unsafe { *(sign_extend(data_) as *const i32) });
         }
     }
 
-    cfg_taggedptr128! {
-        mod dword {
-            use super::*;
-            use core::ptr::null;
+    mod dword {
+        use core::ptr::null;
 
-            #[test]
-            fn into_dword() {
-                let ptr = u64::MAX as *const u8;
-                let count = 0xDEAD;
-                let res = components_as_u128(count, ptr);
-                assert_eq!(res, 0xDEAD_u128 << 64 | u64::MAX as u128);
+        #[test]
+        fn into_dword() {
+            let ptr = u64::MAX as *const u8;
+            let count = 0xDEAD;
+            let res = pack!((count, ptr as u128): 64);
+            assert_eq!(res, 0xDEAD_u128 << 64 | u64::MAX as u128);
 
-                let ptr2 = 0xDEAD_BEEF as *const u8;
-                let res = components_as_u128(count, ptr2);
-                assert_eq!(res, 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128);
+            let ptr2 = 0xDEAD_BEEF as *const u8;
+            let res = pack!((count, ptr2 as u128): 64);
+            assert_eq!(res, 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128);
 
-                let ptr: *const u8 = null();
-                assert_eq!(components_as_u128(0, ptr), 0);
-            }
+            let ptr: *const u8 = null();
+            assert_eq!(pack!((0, ptr as u128): 64), 0);
+        }
 
-            #[test]
-            fn from_dword() {
-                let ptr = u64::MAX as *const u8;
-                let count = 0xDEAD;
-                let res = 0xDEAD_u128 << 64 | u64::MAX as u128;
+        #[test]
+        fn from_dword() {
+            let ptr = u64::MAX as *const u8;
+            let count = 0xDEAD;
+            let res = 0xDEAD_u128 << 64 | u64::MAX as u128;
 
-                assert_eq!(components_from_u128(res), (count, ptr));
+            assert_eq!(unpack!((res): 64), (count, ptr as u128));
 
-                let ptr2 = 0xDEAD_BEEF as *const u8;
-                let res = 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128;
+            let ptr2 = 0xDEAD_BEEF as *const u8;
+            let res = 0xDEAD_u128 << 64 | 0xDEAD_BEEF_u128;
 
-                assert_eq!(components_from_u128(res), (count, ptr2));
+            assert_eq!(unpack!((res): 64), (count, ptr2 as u128));
 
-                let ptr: *const u8 = null();
-                assert_eq!(components_from_u128(0), (0, ptr));
-            }
+            let ptr: *const u8 = null();
+            assert_eq!(unpack!((0_u128): 64), (0, ptr as u128));
+        }
 
-            #[test]
-            fn dword() {
-                let ptr = u64::MAX as *const u8;
-                let ptr2 = 0xDEAD_BEEF as *const u8;
-                let count = 0xDEAD;
+        #[test]
+        fn dword() {
+            let ptr = u64::MAX as *const u8;
+            let ptr2 = 0xDEAD_BEEF as *const u8;
+            let count = 0xDEAD;
 
-                assert_eq!(
-                    components_from_u128(components_as_u128(count, ptr)),
-                    (count, ptr)
-                );
-                assert_eq!(
-                    components_from_u128(components_as_u128(count, ptr2)),
-                    (count, ptr2)
-                );
+            assert_eq!(
+                unpack!((pack!((count, ptr as u128): 64)): 64),
+                (count, ptr as u128)
+            );
+            assert_eq!(
+                unpack!((pack!((count, ptr2 as u128): 64)): 64),
+                (count, ptr2 as u128)
+            );
 
-                let data = &4242;
-                let count = 42;
-                let val = components_as_u128(count, data as *const i32 as *const u8);
-                let (count_, data_): (_, *const i32) = components_from_u128(val);
-                assert_eq!(count, count_);
-                assert_eq!(unsafe { *data_ }, *data);
-            }
+            let data = &4242;
+            let count = 42;
+            let val = pack!((count, data as *const i32 as *const u8 as u128): 64);
+            let (count_, data_): (_, u128) = unpack!((val): 64);
+            assert_eq!(count, count_);
+            // Safety:
+            // ptr to data or data was not modified, if components_as_tagged + from_tagged work as intended
+            assert_eq!(unsafe { *(data_ as *const i32) }, *data);
         }
     }
 

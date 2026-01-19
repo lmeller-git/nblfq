@@ -6,7 +6,7 @@ description = "Atomic, wait-free MPMC queues based on the nblfq algorithm"
 license = "MIT"
 
 [features]
-default = ["pool"]
+default = ["pool", "atomic-fallback"]
 std = ["alloc"]
 alloc = []
 pool = []

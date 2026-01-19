@@ -10,6 +10,8 @@ extern crate alloc;
 #[cfg(any(feature = "std", test))]
 extern crate std;
 
+#[macro_use]
+pub(crate) mod utils;
 mod array;
 pub mod core;
 #[cfg(any(feature = "alloc", test))]
@@ -19,7 +21,6 @@ mod pool;
 mod sync;
 #[cfg(test)]
 mod tests;
-mod utils;
 
 #[cfg(feature = "pool")]
 pub use array::PooledStaticQueue;

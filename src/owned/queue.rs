@@ -1,8 +1,8 @@
 use crate::{
     MPMCQueue,
     core::{
+        AsPackedValue,
         queue::QueueCore,
-        slot::PtrLike,
         slots::{Auto, SlotType},
     },
     owned::buffer::BoxedBuffer,
@@ -20,7 +20,7 @@ pub use pooled_queue::*;
 /// only available on feature `alloc`
 pub struct Queue<T, S = Auto>
 where
-    T: PtrLike,
+    T: AsPackedValue,
     S: SlotType<T>,
 {
     inner: QueueCore<BoxedBuffer<S::Slot>>,
@@ -28,14 +28,16 @@ where
 
 impl<T> Queue<T, Auto>
 where
-    T: PtrLike,
+    T: AsPackedValue,
 {
-    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`
+    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
+    /// `T` must fit into the chosen slot type
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
-    /// Constructs a new `Queue` with capacity `size` and slot type `S`
+    /// Constructs a new `Queue` with capacity `size` and slot type `S`.
+    /// `T` must fit into the slot type `S`
     pub fn with_slot<S>(size: usize) -> Queue<T, S>
     where
         S: SlotType<T>,
@@ -48,7 +50,7 @@ where
 
 impl<T, S> MPMCQueue for Queue<T, S>
 where
-    T: PtrLike,
+    T: AsPackedValue,
     S: SlotType<T>,
 {
     type Item = T;
