@@ -4,49 +4,49 @@
 //! https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue
 
 use core::sync::atomic::{AtomicUsize, Ordering};
-use std::{boxed::Box, thread::scope, vec::Vec};
+use std::{thread::scope, vec::Vec};
 
 use crate::MPMCQueue;
 
 pub(crate) fn smoke<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static usize>,
+    Q: MPMCQueue<Item = u32>,
 {
-    q.push(&7).unwrap();
-    assert_eq!(q.pop(), Some(&7));
-    q.push(&8).unwrap();
-    assert_eq!(q.pop(), Some(&8));
+    q.push(7).unwrap();
+    assert_eq!(q.pop(), Some(7));
+    q.push(8).unwrap();
+    assert_eq!(q.pop(), Some(8));
     assert!(q.pop().is_none());
 }
 
 pub(crate) fn smoke_long<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static i32>,
+    Q: MPMCQueue<Item = u32>,
 {
-    q.push(&7).unwrap();
-    assert_eq!(q.pop(), Some(&7));
-    q.push(&8).unwrap();
-    q.push(&9).unwrap();
-    assert_eq!(q.pop(), Some(&8));
-    assert_eq!(q.pop(), Some(&9));
+    q.push(7).unwrap();
+    assert_eq!(q.pop(), Some(7));
+    q.push(8).unwrap();
+    q.push(9).unwrap();
+    assert_eq!(q.pop(), Some(8));
+    assert_eq!(q.pop(), Some(9));
     assert!(q.pop().is_none());
 }
 
 pub(crate) fn len_empty_full<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static ()>,
+    Q: MPMCQueue<Item = ()>,
 {
     assert_eq!(q.len(), 0);
     assert!(q.is_empty());
     assert!(!q.is_full());
 
-    q.push(&()).unwrap();
+    q.push(()).unwrap();
 
     assert_eq!(q.len(), 1);
     assert!(!q.is_empty());
     assert!(!q.is_full());
 
-    q.push(&()).unwrap();
+    q.push(()).unwrap();
 
     assert_eq!(q.len(), 2);
     assert!(!q.is_empty());
@@ -61,7 +61,7 @@ where
 
 pub(crate) fn len<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 30;
@@ -78,9 +78,8 @@ where
 
     for _ in 0..CAP / 10 {
         for i in 0..ITERS {
-            let i = Box::new(i);
-            q.push(i.clone()).unwrap();
-            assert_eq!(q.len(), *i + 1);
+            q.push(i as u32).unwrap();
+            assert_eq!(q.len(), i + 1);
         }
 
         for i in 0..ITERS {
@@ -91,9 +90,8 @@ where
     assert_eq!(q.len(), 0);
 
     for i in 0..CAP {
-        let i = Box::new(i);
-        q.push(i.clone()).unwrap();
-        assert_eq!(q.len(), *i + 1);
+        q.push(i as u32).unwrap();
+        assert_eq!(q.len(), i + 1);
     }
 
     assert!(q.is_full());
@@ -109,7 +107,7 @@ where
             for i in 0..COUNT {
                 loop {
                     if let Some(x) = q.pop() {
-                        assert_eq!(*x, i);
+                        assert_eq!(x, i as u32);
                         break;
                     }
                 }
@@ -120,8 +118,7 @@ where
 
         scope.spawn(|| {
             for i in 0..COUNT {
-                let i = Box::new(i);
-                while q.push(i.clone()).is_err() {}
+                while q.push(i as u32).is_err() {}
                 let len = q.len();
                 assert!(len <= CAP);
             }
@@ -132,7 +129,7 @@ where
 
 pub(crate) fn spsc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 50;
@@ -144,7 +141,7 @@ where
             for i in 0..COUNT {
                 loop {
                     if let Some(x) = q.pop() {
-                        assert_eq!(*x, i);
+                        assert_eq!(x, i as u32);
                         break;
                     }
                 }
@@ -154,7 +151,7 @@ where
 
         scope.spawn(|| {
             for i in 0..COUNT {
-                while q.push(Box::new(i)).is_err() {}
+                while q.push(i as u32).is_err() {}
             }
         });
     })
@@ -162,7 +159,7 @@ where
 
 pub(crate) fn mpsc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 10;
@@ -176,7 +173,7 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(Box::new(i)).is_err() {}
+                    while q.push(i as u32).is_err() {}
                 }
             });
         }
@@ -187,7 +184,7 @@ where
                         break x;
                     }
                 };
-                v[*n].fetch_add(1, Ordering::SeqCst);
+                v[n as usize].fetch_add(1, Ordering::SeqCst);
             }
         }
     });
@@ -199,7 +196,7 @@ where
 
 pub(crate) fn mpmc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 50;
@@ -218,14 +215,14 @@ where
                             break x;
                         }
                     };
-                    v[*n].fetch_add(1, Ordering::SeqCst);
+                    v[n as usize].fetch_add(1, Ordering::SeqCst);
                 }
             });
         }
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(Box::new(i)).is_err() {}
+                    while q.push(i as u32).is_err() {}
                 }
             });
         }
@@ -238,7 +235,7 @@ where
 
 pub(crate) fn mpmc_ring_buffer<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = Box<usize>> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 50;
@@ -256,14 +253,14 @@ where
                     match t.load(Ordering::SeqCst) {
                         0 => {
                             while let Some(n) = q.pop() {
-                                v[*n].fetch_add(1, Ordering::SeqCst);
+                                v[n as usize].fetch_add(1, Ordering::SeqCst);
                             }
                             break;
                         }
 
                         _ => {
                             while let Some(n) = q.pop() {
-                                v[*n].fetch_add(1, Ordering::SeqCst);
+                                v[n as usize].fetch_add(1, Ordering::SeqCst);
                             }
                         }
                     }
@@ -274,8 +271,8 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    q.force_push_and_do(Box::new(i), |n| {
-                        v[*n].fetch_add(1, Ordering::SeqCst);
+                    q.force_push_and_do(i as u32, |n| {
+                        v[n as usize].fetch_add(1, Ordering::SeqCst);
                     })
                 }
 
@@ -291,7 +288,7 @@ where
 
 pub(crate) fn linearizable<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static i32> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     #[cfg(miri)]
     const COUNT: usize = 100;
@@ -303,7 +300,7 @@ where
         for _ in 0..THREADS / 2 {
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    while q.push(&0).is_err() {}
+                    while q.push(42).is_err() {}
                     q.pop().unwrap();
                 }
             });
@@ -311,7 +308,7 @@ where
             scope.spawn(|| {
                 for _ in 0..COUNT {
                     let popped = &mut false;
-                    q.force_push_and_do(&0, |_| {
+                    q.force_push_and_do(42, |_| {
                         if *popped {
                             panic!("popped multiple items")
                         }

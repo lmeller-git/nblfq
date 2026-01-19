@@ -89,15 +89,16 @@ macro_rules! atomic_encode_primitive {
         // Safety:
         // primitve numeric types with size <= WIDTH can be typecast safely
         unsafe impl $crate::core::AsPackedValue for $type {
-            const MIN_BIT_WIDTH: usize = size_of::<$type>() * 8;
+            // storing one bit more allows also storing nul.
+            // TODO remove this on `allow_empty`
+            const MIN_BIT_WIDTH: usize = size_of::<$type>() * 8 + 1;
 
             fn encode(zelf: Self) -> $crate::core::NonZeroTruncatedU64<Self> {
-                $crate::core::NonZeroTruncatedU64::new(zelf as u64)
-                    .expect("tried to store a zero value in queue. This is UB.")
+                $crate::core::NonZeroTruncatedU64::new(zelf as u64 + 1).unwrap()
             }
 
             unsafe fn decode(raw: $crate::core::NonZeroTruncatedU64<Self>) -> Self {
-                raw.read() as Self
+                (raw.read() - 1) as Self
             }
         }
     };
@@ -109,6 +110,20 @@ atomic_encode_primitive!(u8);
 atomic_encode_primitive!(i32);
 atomic_encode_primitive!(i16);
 atomic_encode_primitive!(i8);
+
+// Safety:
+// TODO
+unsafe impl AsPackedValue for () {
+    // do not truncate to 0
+    const MIN_BIT_WIDTH: usize = 1;
+
+    fn encode(_zelf: Self) -> NonZeroTruncatedU64<Self> {
+        NonZeroTruncatedU64::new(1).unwrap()
+    }
+
+    unsafe fn decode(_raw: NonZeroTruncatedU64<Self>) -> Self {}
+}
+
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
 
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
