@@ -1,15 +1,15 @@
-/// cfg that disables TaggedPtr64 based on architecture and feature flags.
+/// cfg that disables Tagged64 slot based on architecture and feature flags.
 ///
 /// Usage:
 /// ```rust
-/// use nblf_queue::cfg_taggedptr64;
+/// use nblf_queue::cfg_atomic_tagged64;
 ///
-/// cfg_taggedptr64! {
-///     use nblf_queue::core::slots::TaggedPtr64;
+/// cfg_atomic_tagged64! {
+///     use nblf_queue::core::slots::Tagged64;
 /// }
 /// ```
 #[macro_export]
-macro_rules! cfg_taggedptr64 {
+macro_rules! cfg_atomic_tagged64 {
     ($($item:item)*) => {
        $(
            #[cfg(any(target_has_atomic = "64", feature = "atomic-fallback"))]
@@ -18,21 +18,21 @@ macro_rules! cfg_taggedptr64 {
     };
 }
 
-/// cfg that disables TaggedPtr128 based on architecture and feature flags.
+/// cfg that disables Tagged128 slot based on architecture and feature flags.
 ///
 /// Usage:
 /// ```rust
-/// use nblf_queue::cfg_taggedptr128;
+/// use nblf_queue::cfg_atomic_tagged128;
 ///
-/// cfg_taggedptr128! {
-///     use nblf_queue::core::slots::TaggedPtr128;
+/// cfg_atomic_tagged128! {
+///     use nblf_queue::core::slots::Tagged128;
 /// }
 /// ```
 #[macro_export]
-macro_rules! cfg_taggedptr128 {
+macro_rules! cfg_atomic_tagged128 {
     ($($item:item)*) => {
         $(
-            #[cfg(any(target_has_atomic = "128", all(feature = "atomic-fallback", not(loom))))]
+            #[cfg(any(target_has_atomic = "128", all(feature = "atomic-fallback", not(loom), not(shuttle))))]
             $item
         )*
     };

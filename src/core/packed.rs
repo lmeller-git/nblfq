@@ -1,20 +1,26 @@
 use core::marker::PhantomData;
 use core::{num::NonZeroU64, ptr::NonNull};
 
+// TODO add safety comments in branch `allow_empty`
+
+/// This trait is used to store the value in a `Slot`.
+/// The slot may truncate the value to `MIN_BIT_WIDTH` bits.
+/// Types implementing `AsPackedValue` may be stored in slots with `MAX_CARGO_BIT_WIDTH` >= `MIN_BIT_WIDTH`. This will be checked at compile time.
 /// # SAFETY
 /// TODO
 pub unsafe trait AsPackedValue: Sized {
-    /// TODO
+    /// The minimal bit width from which this type may be reconstructed.
     const MIN_BIT_WIDTH: usize;
-    /// TODO
+    /// Truncates `Self` to the lower `MIN_BIT_WIDTH` bits.
     fn encode(zelf: Self) -> NonZeroTruncatedU64<Self>;
 
+    /// Reconstructs `Self` from the lower `MIN_BIT_WIDTH` bits returned by `encode`.
     /// # SAFETY
     /// TODO
     unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self;
 }
 
-/// TODO
+/// A NonZero U64, with the upper N bit set to 0.
 #[repr(transparent)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct NonZeroTruncatedU64<T> {
@@ -42,7 +48,7 @@ impl<T> NonZeroTruncatedU64<T> {
         })
     }
 
-    /// TODO
+    /// Returns the raw u64 stored in this type
     pub fn read(&self) -> u64 {
         self.v.get()
     }
@@ -61,7 +67,9 @@ impl<T> NonZeroTruncatedU64<T> {
 }
 
 impl<T: AsPackedValue> NonZeroTruncatedU64<T> {
-    /// huh
+    /// Contructs a new `NonZeroTruncatedU64` from an u64.
+    /// This method will zero the upper 64 - `T::MIN_BIT_WIDTH` bits.
+    /// Returns `None` if value was 0.
     pub fn new(mut value: u64) -> Option<Self> {
         // TODO make this a const created mask
         if T::MIN_BIT_WIDTH < 64 {
@@ -81,15 +89,16 @@ macro_rules! atomic_encode_primitive {
         // Safety:
         // primitve numeric types with size <= WIDTH can be typecast safely
         unsafe impl $crate::core::AsPackedValue for $type {
-            const MIN_BIT_WIDTH: usize = size_of::<$type>() * 8;
+            // storing one bit more allows also storing nul.
+            // TODO remove this on `allow_empty`
+            const MIN_BIT_WIDTH: usize = size_of::<$type>() * 8 + 1;
 
             fn encode(zelf: Self) -> $crate::core::NonZeroTruncatedU64<Self> {
-                $crate::core::NonZeroTruncatedU64::new(zelf as u64)
-                    .expect("tried to store a zero value in queue. This is UB.")
+                $crate::core::NonZeroTruncatedU64::new(zelf as u64 + 1).unwrap()
             }
 
             unsafe fn decode(raw: $crate::core::NonZeroTruncatedU64<Self>) -> Self {
-                raw.read() as Self
+                (raw.read() - 1) as Self
             }
         }
     };
@@ -101,6 +110,20 @@ atomic_encode_primitive!(u8);
 atomic_encode_primitive!(i32);
 atomic_encode_primitive!(i16);
 atomic_encode_primitive!(i8);
+
+// Safety:
+// TODO
+unsafe impl AsPackedValue for () {
+    // do not truncate to 0
+    const MIN_BIT_WIDTH: usize = 1;
+
+    fn encode(_zelf: Self) -> NonZeroTruncatedU64<Self> {
+        NonZeroTruncatedU64::new(1).unwrap()
+    }
+
+    unsafe fn decode(_raw: NonZeroTruncatedU64<Self>) -> Self {}
+}
+
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
 
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]

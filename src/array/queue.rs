@@ -28,12 +28,14 @@ impl<T, const N: usize> StaticQueue<T, N, Auto>
 where
     T: AsPackedValue,
 {
-    /// Constructs a new `StaticQueue` with slot type `Auto`
+    /// Constructs a new `StaticQueue` with slot type `Auto`.
+    /// `T` must fit into the chosen slot type
     pub fn new() -> Self {
         Self::with_slot::<Auto>()
     }
 
-    /// Constructs a new `StaticQueue` with slot type `S`
+    /// Constructs a new `StaticQueue` with slot type `S`.
+    /// `T` must fit into the slot type `S`
     pub fn with_slot<S>() -> StaticQueue<T, N, S>
     where
         S: SlotType<T>,
