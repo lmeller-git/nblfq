@@ -42,30 +42,9 @@ impl<T> Clone for TruncatedU64<T> {
 impl<T> Copy for TruncatedU64<T> {}
 
 impl<T> TruncatedU64<T> {
-    #[allow(dead_code)]
-    pub(crate) fn new_with_size<const BIT_WIDTH: usize>(mut value: u64) -> Self {
-        if BIT_WIDTH < 64 {
-            value = unpack!((value): BIT_WIDTH).1;
-        }
-        Self {
-            v: value,
-            _phantom: PhantomData,
-        }
-    }
-
     /// Returns the raw u64 stored in this type
     pub fn read(&self) -> u64 {
         self.v
-    }
-
-    #[allow(dead_code)]
-    // Safety:
-    // The caller must ensure that the upper N bits are correctly zeroed
-    pub(crate) unsafe fn new_unchecked(value: u64) -> Self {
-        Self {
-            v: value,
-            _phantom: PhantomData,
-        }
     }
 }
 
@@ -141,9 +120,7 @@ unsafe impl AsPackedValue for () {
     const MIN_BIT_WIDTH: usize = 0;
 
     fn encode(_zelf: Self) -> TruncatedU64<Self> {
-        // Safety:
-        // no need to truncate anything on a zero value
-        unsafe { TruncatedU64::new_unchecked(0) }
+        TruncatedU64::new(0)
     }
 
     // Safety:
@@ -769,8 +746,10 @@ mod tests {
 
                 let mut encoded = AsPackedValue::encode(ptr1);
 
-                let packed_encoded = pack!((!0, encoded.read()): WIDTH);
-                encoded = TruncatedU64::new(packed_encoded);
+                if WIDTH < 64 {
+                    let packed_encoded = pack!((!0, encoded.read()): WIDTH);
+                    encoded = TruncatedU64::new(packed_encoded);
+                }
 
                 // Safety:
                 // we just encoded this value
