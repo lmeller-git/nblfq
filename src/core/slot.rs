@@ -70,9 +70,6 @@ where
     }
 }
 
-// TODO
-// use more bits of the tagged value for count, based on Item::MIN_BITS
-
 cfg_atomic_tagged64! {
     mod tagged_ptr64 {
         use core::marker::PhantomData;
