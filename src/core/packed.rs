@@ -277,13 +277,11 @@ mod x86_64 {
 
     #[cfg(any(feature = "alloc", test))]
     mod alloc_ {
-        use std::rc;
-
         use super::*;
 
         use alloc::{
             boxed::Box,
-            rc::Rc,
+            rc::{self, Rc},
             sync::{self, Arc},
         };
 
@@ -483,7 +481,7 @@ mod full_bit64 {
 
         use alloc::{
             boxed::Box,
-            rc::Rc,
+            rc::{self, Rc},
             sync::{self, Arc},
         };
 
@@ -514,7 +512,7 @@ mod full_bit64 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { Rc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { Rc::from_raw(raw.read() as *mut T) }
             }
         }
 
@@ -530,7 +528,7 @@ mod full_bit64 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { Arc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { Arc::from_raw(raw.read() as *mut T) }
             }
         }
 
@@ -546,7 +544,7 @@ mod full_bit64 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { rc::Weak::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { rc::Weak::from_raw(raw.read() as *mut T) }
             }
         }
 
@@ -562,7 +560,7 @@ mod full_bit64 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { sync::Weak::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { sync::Weak::from_raw(raw.read() as *mut T) }
             }
         }
     }
@@ -576,7 +574,7 @@ mod bit32 {
 
     const _assert_ptr_size: () = const {
         assert!(
-            core::mem::size_of::<usize> * 8 <= 32,
+            core::mem::size_of::<usize>() * 8 <= 32,
             "pointer width is larger than 32 bit. This implementation is not safe."
         )
     };
@@ -666,7 +664,7 @@ mod bit32 {
 
         use alloc::{
             boxed::Box,
-            rc::Rc,
+            rc::{self, Rc},
             sync::{self, Arc},
         };
 
@@ -697,7 +695,7 @@ mod bit32 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { Rc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { Rc::from_raw(raw.read() as *mut T) }
             }
         }
 
@@ -713,7 +711,7 @@ mod bit32 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { Arc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { Arc::from_raw(raw.read() as *mut T) }
             }
         }
 
@@ -729,7 +727,7 @@ mod bit32 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { rc::Weak::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { rc::Weak::from_raw(raw.read() as *mut T) }
             }
         }
 
@@ -745,7 +743,7 @@ mod bit32 {
             unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
-                unsafe { sync::Weak::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+                unsafe { sync::Weak::from_raw(raw.read() as *mut T) }
             }
         }
     }
@@ -767,6 +765,7 @@ mod tests {
                 const WIDTH: usize = <$type as AsPackedValue>::MIN_BIT_WIDTH;
 
                 let ptr1 = $constructor;
+                let expected = $deref(&ptr1);
 
                 let mut encoded = AsPackedValue::encode(ptr1);
 
@@ -777,11 +776,11 @@ mod tests {
                 // we just encoded this value
                 let decoded = unsafe { AsPackedValue::decode(encoded) };
 
-                assert_eq!($deref(decoded), $deref($constructor));
+                assert_eq!($deref(&decoded), expected);
             }
         };
         ($name:ident: $constructor:expr, $type:ty) => {
-            generate_test!($name: $constructor, $type, |x| x);
+            generate_test!($name: $constructor, $type, |x: &$type| x.clone());
         };
     }
 
@@ -805,7 +804,7 @@ mod tests {
         generate_test!(r#box: Box::new(VALUE), Box<i32>);
         generate_test!(r#arc: Arc::new(VALUE), Arc<i32>);
         generate_test!(r#rc: Rc::new(VALUE), Rc<i32>);
-        generate_test!(weak_rc: Rc::downgrade(&Rc::new(VALUE)), rc::Weak<i32>, |x: rc::Weak<i32>| x.as_ptr());
-        generate_test!(weak_arc: Arc::downgrade(&Arc::new(VALUE)), sync::Weak<i32>, |x: sync::Weak<i32>| x.as_ptr());
+        generate_test!(weak_rc: Rc::downgrade(&Rc::new(VALUE)), rc::Weak<i32>, |x: &rc::Weak<i32>| x.as_ptr());
+        generate_test!(weak_arc: Arc::downgrade(&Arc::new(VALUE)), sync::Weak<i32>, |x: &sync::Weak<i32>| x.as_ptr());
     }
 }
