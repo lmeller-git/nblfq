@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use core::{num::NonZeroU64, ptr::NonNull};
+use core::ptr::NonNull;
 
 // TODO add safety comments in branch `allow_empty`
 
@@ -12,45 +12,45 @@ pub unsafe trait AsPackedValue: Sized {
     /// The minimal bit width from which this type may be reconstructed.
     const MIN_BIT_WIDTH: usize;
     /// Truncates `Self` to the lower `MIN_BIT_WIDTH` bits.
-    fn encode(zelf: Self) -> NonZeroTruncatedU64<Self>;
+    fn encode(zelf: Self) -> TruncatedU64<Self>;
 
     /// Reconstructs `Self` from the lower `MIN_BIT_WIDTH` bits returned by `encode`.
     /// # SAFETY
     /// TODO
-    unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self;
+    unsafe fn decode(raw: TruncatedU64<Self>) -> Self;
 }
 
-/// A NonZero U64, with the upper N bit set to 0.
+/// An U64, with the upper N bit set to 0.
 #[repr(transparent)]
 #[derive(Debug, PartialEq, Eq)]
-pub struct NonZeroTruncatedU64<T> {
-    v: NonZeroU64,
+pub struct TruncatedU64<T> {
+    v: u64,
     _phantom: PhantomData<T>,
 }
 
-impl<T> Clone for NonZeroTruncatedU64<T> {
+impl<T> Clone for TruncatedU64<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T> Copy for NonZeroTruncatedU64<T> {}
+impl<T> Copy for TruncatedU64<T> {}
 
-impl<T> NonZeroTruncatedU64<T> {
+impl<T> TruncatedU64<T> {
     #[allow(dead_code)]
-    pub(crate) fn new_with_size<const BIT_WIDTH: usize>(mut value: u64) -> Option<Self> {
+    pub(crate) fn new_with_size<const BIT_WIDTH: usize>(mut value: u64) -> Self {
         if BIT_WIDTH < 64 {
             value = unpack!((value): BIT_WIDTH).1;
         }
-        Some(Self {
-            v: NonZeroU64::new(value)?,
+        Self {
+            v: value,
             _phantom: PhantomData,
-        })
+        }
     }
 
     /// Returns the raw u64 stored in this type
     pub fn read(&self) -> u64 {
-        self.v.get()
+        self.v
     }
 
     #[allow(dead_code)]
@@ -58,27 +58,24 @@ impl<T> NonZeroTruncatedU64<T> {
     // TODO
     pub(crate) unsafe fn new_unchecked(value: u64) -> Self {
         Self {
-            // Safety:
-            // TODO
-            v: unsafe { NonZeroU64::new_unchecked(value) },
+            v: value,
             _phantom: PhantomData,
         }
     }
 }
 
-impl<T: AsPackedValue> NonZeroTruncatedU64<T> {
-    /// Contructs a new `NonZeroTruncatedU64` from an u64.
+impl<T: AsPackedValue> TruncatedU64<T> {
+    /// Contructs a new `TruncatedU64` from an u64.
     /// This method will zero the upper 64 - `T::MIN_BIT_WIDTH` bits.
-    /// Returns `None` if value was 0.
-    pub fn new(mut value: u64) -> Option<Self> {
+    pub fn new(mut value: u64) -> Self {
         // TODO make this a const created mask
         if T::MIN_BIT_WIDTH < 64 {
             value = unpack!((value): T::MIN_BIT_WIDTH).1;
         }
-        Some(Self {
-            v: NonZeroU64::new(value)?,
+        Self {
+            v: value,
             _phantom: PhantomData,
-        })
+        }
     }
 }
 
@@ -89,16 +86,14 @@ macro_rules! atomic_encode_primitive {
         // Safety:
         // primitve numeric types with size <= WIDTH can be typecast safely
         unsafe impl $crate::core::AsPackedValue for $type {
-            // storing one bit more allows also storing nul.
-            // TODO remove this on `allow_empty`
-            const MIN_BIT_WIDTH: usize = size_of::<$type>() * 8 + 1;
+            const MIN_BIT_WIDTH: usize = size_of::<$type>() * 8;
 
-            fn encode(zelf: Self) -> $crate::core::NonZeroTruncatedU64<Self> {
-                $crate::core::NonZeroTruncatedU64::new(zelf as u64 + 1).unwrap()
+            fn encode(zelf: Self) -> $crate::core::TruncatedU64<Self> {
+                $crate::core::TruncatedU64::new(zelf as u64)
             }
 
-            unsafe fn decode(raw: $crate::core::NonZeroTruncatedU64<Self>) -> Self {
-                (raw.read() - 1) as Self
+            unsafe fn decode(raw: $crate::core::TruncatedU64<Self>) -> Self {
+                (raw.read()) as Self
             }
         }
     };
@@ -112,16 +107,17 @@ atomic_encode_primitive!(i16);
 atomic_encode_primitive!(i8);
 
 // Safety:
-// TODO
+// () has no size and data
 unsafe impl AsPackedValue for () {
-    // do not truncate to 0
-    const MIN_BIT_WIDTH: usize = 1;
+    const MIN_BIT_WIDTH: usize = 0;
 
-    fn encode(_zelf: Self) -> NonZeroTruncatedU64<Self> {
-        NonZeroTruncatedU64::new(1).unwrap()
+    fn encode(_zelf: Self) -> TruncatedU64<Self> {
+        // Safety:
+        // no need to truncate anything on a zero value
+        unsafe { TruncatedU64::new_unchecked(0) }
     }
 
-    unsafe fn decode(_raw: NonZeroTruncatedU64<Self>) -> Self {}
+    unsafe fn decode(_raw: TruncatedU64<Self>) -> Self {}
 }
 
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
@@ -137,12 +133,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 48;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             crate::utils::sign_extend(raw.read()) as *const T
         }
     }
@@ -154,12 +149,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 48;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             crate::utils::sign_extend(raw.read()) as *mut T
         }
     }
@@ -171,12 +165,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 48;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf.as_ptr() as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf.as_ptr() as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             Self::new(crate::utils::sign_extend(raw.read()) as *mut T)
                 .expect("tried to recosntruct a NonNull from 0")
         }
@@ -186,12 +179,11 @@ mod x86_64 {
     // TODO
     unsafe impl<T> AsPackedValue for &'static T {
         const MIN_BIT_WIDTH: usize = 48;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as *const T as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as *const T as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             // Safety:
             // TODO
             unsafe { &*(crate::utils::sign_extend(raw.read()) as *const T) }
@@ -202,12 +194,11 @@ mod x86_64 {
     // TODO
     unsafe impl<T> AsPackedValue for &'static mut T {
         const MIN_BIT_WIDTH: usize = 48;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as *mut T as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as *mut T as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             // Safety:
             // TODO
             unsafe { &mut *(crate::utils::sign_extend(raw.read()) as *mut T) }
@@ -224,12 +215,11 @@ mod x86_64 {
         // TODO
         unsafe impl<T> AsPackedValue for Arc<T> {
             const MIN_BIT_WIDTH: usize = 48;
-            fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-                NonZeroTruncatedU64::new(Arc::into_raw(zelf) as u64)
-                    .expect("tried to store null ptr in queue. This is UB")
+            fn encode(zelf: Self) -> TruncatedU64<Self> {
+                TruncatedU64::new(Arc::into_raw(zelf) as u64)
             }
 
-            unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+            unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // TODO
                 unsafe { Arc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
@@ -240,12 +230,11 @@ mod x86_64 {
         // TODO
         unsafe impl<T> AsPackedValue for Box<T> {
             const MIN_BIT_WIDTH: usize = 48;
-            fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-                NonZeroTruncatedU64::new(Box::into_raw(zelf) as u64)
-                    .expect("tried to store null ptr in queue. This is UB")
+            fn encode(zelf: Self) -> TruncatedU64<Self> {
+                TruncatedU64::new(Box::into_raw(zelf) as u64)
             }
 
-            unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+            unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // TODO
                 unsafe { Box::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
@@ -256,12 +245,11 @@ mod x86_64 {
         // TODO
         unsafe impl<T> AsPackedValue for Rc<T> {
             const MIN_BIT_WIDTH: usize = 48;
-            fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-                NonZeroTruncatedU64::new(Rc::into_raw(zelf) as u64)
-                    .expect("tried to store null ptr in queue. This is UB")
+            fn encode(zelf: Self) -> TruncatedU64<Self> {
+                TruncatedU64::new(Rc::into_raw(zelf) as u64)
             }
 
-            unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+            unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // TODO
                 unsafe { Rc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
@@ -281,12 +269,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 64;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *const T
         }
     }
@@ -298,12 +285,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 64;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *mut T
         }
     }
@@ -315,12 +301,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 64;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf.as_ptr() as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf.as_ptr() as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             Self::new(raw.read() as *mut T).expect("tried to recosntruct a NonNull from 0")
         }
     }
@@ -329,12 +314,11 @@ mod x86_64 {
     // TODO
     unsafe impl<T> AsPackedValue for &'static T {
         const MIN_BIT_WIDTH: usize = 64;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as *const T as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as *const T as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             // Safety:
             // TODO
             unsafe { &*(raw.read() as *const T) }
@@ -345,12 +329,11 @@ mod x86_64 {
     // TODO
     unsafe impl<T> AsPackedValue for &'static mut T {
         const MIN_BIT_WIDTH: usize = 64;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as *mut T as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as *mut T as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             // Safety:
             // TODO
             unsafe { &mut *(raw.read() as *mut T) }
@@ -367,12 +350,11 @@ mod x86_64 {
         // TODO
         unsafe impl<T> AsPackedValue for Arc<T> {
             const MIN_BIT_WIDTH: usize = 48;
-            fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-                NonZeroTruncatedU64::new(Arc::into_raw(zelf) as u64)
-                    .expect("tried to store null ptr in queue. This is UB")
+            fn encode(zelf: Self) -> TruncatedU64<Self> {
+                TruncatedU64::new(Arc::into_raw(zelf) as u64)
             }
 
-            unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+            unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // TODO
                 unsafe { Arc::from_raw(raw.read() as *mut T) }
@@ -383,12 +365,11 @@ mod x86_64 {
         // TODO
         unsafe impl<T> AsPackedValue for Box<T> {
             const MIN_BIT_WIDTH: usize = 48;
-            fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-                NonZeroTruncatedU64::new(Box::into_raw(zelf) as u64)
-                    .expect("tried to store null ptr in queue. This is UB")
+            fn encode(zelf: Self) -> TruncatedU64<Self> {
+                TruncatedU64::new(Box::into_raw(zelf) as u64)
             }
 
-            unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+            unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // TODO
                 unsafe { Box::from_raw(raw.read() as *mut T) }
@@ -399,12 +380,11 @@ mod x86_64 {
         // TODO
         unsafe impl<T> AsPackedValue for Rc<T> {
             const MIN_BIT_WIDTH: usize = 48;
-            fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-                NonZeroTruncatedU64::new(Rc::into_raw(zelf) as u64)
-                    .expect("tried to store null ptr in queue. This is UB")
+            fn encode(zelf: Self) -> TruncatedU64<Self> {
+                TruncatedU64::new(Rc::into_raw(zelf) as u64)
             }
 
-            unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+            unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
                 // Safety:
                 // TODO
                 unsafe { Rc::from_raw(raw.read() as *mut T) }
@@ -426,12 +406,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 32;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *const T
         }
     }
@@ -443,12 +422,11 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 32;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *mut T
         }
     }
@@ -460,13 +438,12 @@ mod x86_64 {
         T: Sized,
     {
         const MIN_BIT_WIDTH: usize = 32;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf.as_ptr() as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf.as_ptr() as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
-            Self::new(raw.read() as *mut T).expect("tried to recosntruct a NonNull from 0")
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
+            Self::new(raw.read() as *mut T)
         }
     }
 
@@ -474,12 +451,11 @@ mod x86_64 {
     // TODO
     unsafe impl<T> AsPackedValue for &'static T {
         const MIN_BIT_WIDTH: usize = 32;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as *const T as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as *const T as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             // Safety:
             // TODO
             unsafe { &*(raw.read() as *const T) }
@@ -490,12 +466,11 @@ mod x86_64 {
     // TODO
     unsafe impl<T> AsPackedValue for &'static mut T {
         const MIN_BIT_WIDTH: usize = 32;
-        fn encode(zelf: Self) -> NonZeroTruncatedU64<Self> {
-            NonZeroTruncatedU64::new(zelf as *mut T as u64)
-                .expect("tried to store null ptr in queue. This is UB")
+        fn encode(zelf: Self) -> TruncatedU64<Self> {
+            TruncatedU64::new(zelf as *mut T as u64)
         }
 
-        unsafe fn decode(raw: NonZeroTruncatedU64<Self>) -> Self {
+        unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             // Safety:
             // TODO
             unsafe { &mut *(raw.read() as *mut T) }

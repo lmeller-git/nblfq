@@ -6,7 +6,7 @@ use core::{
 
 use crate::{
     MPMCQueue,
-    core::{AsPackedValue, NonZeroTruncatedU64, buffer::Buffer},
+    core::{AsPackedValue, TruncatedU64, buffer::Buffer},
     sync::cell::UnsafeCell,
 };
 
@@ -26,7 +26,7 @@ where
     fn new(data_buf: DataBuf, index_queue: Q) -> Self {
         let cap = index_queue.capacity();
         for i in 0..cap {
-            _ = index_queue.push(ItemHandle::new(OwnedIdx::new(i + 1)));
+            _ = index_queue.push(ItemHandle::new(OwnedIdx::new(i)));
         }
 
         Self {
@@ -48,11 +48,10 @@ where
             return Err(item);
         }
         let next_free = next_free.unwrap().idx;
-        // idx points to slot + 1
         let cell = self
             .data
             .inner()
-            .get(next_free.idx - 1)
+            .get(next_free.idx)
             .expect("popped an invalid index from self.free_slots. This is a bug.");
         // SAFETY:
         // The caller has to guarantee that each index is unique, i.e. that only one thread may own an index at a time.
@@ -61,8 +60,7 @@ where
     }
 
     fn deallocate(&self, idx: OwnedIdx) -> Option<T> {
-        // idx points to slot + 1
-        let slot = self.data.inner().get(idx.idx - 1)?;
+        let slot = self.data.inner().get(idx.idx)?;
         // SAFETY:
         // The caller has to guarantee that each index is unique, i.e. that only one thread may own an index at a time.
         let item = slot.with_mut(|c| unsafe { &mut *c }.take());
@@ -183,16 +181,15 @@ impl<T> Add<usize> for ItemHandle<T> {
 
 // SAFETY:
 // the caller must ensure that:
-// - the index stored in ItemHandle<T> is never 0
 // - the index stored in ItemHandle<T> uses at most 48 bits, if stored in a TaggedPtr64
 unsafe impl<T> AsPackedValue for ItemHandle<T> {
     const MIN_BIT_WIDTH: usize = 48;
 
-    fn encode(zelf: Self) -> crate::core::NonZeroTruncatedU64<Self> {
-        NonZeroTruncatedU64::new(zelf.idx() as u64).unwrap()
+    fn encode(zelf: Self) -> crate::core::TruncatedU64<Self> {
+        TruncatedU64::new(zelf.idx() as u64)
     }
 
-    unsafe fn decode(raw: crate::core::NonZeroTruncatedU64<Self>) -> Self {
+    unsafe fn decode(raw: crate::core::TruncatedU64<Self>) -> Self {
         Self::new(OwnedIdx::new(raw.read() as usize))
     }
 }

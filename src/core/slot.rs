@@ -1,4 +1,4 @@
-use crate::core::{AsPackedValue, NonZeroTruncatedU64};
+use crate::core::{AsPackedValue, TruncatedU64};
 
 cfg_atomic_tagged128! {
     pub use tagged_ptr_u128_portable::*;
@@ -11,21 +11,20 @@ pub(crate) trait Slot: Default {
     type Item;
     type Storage: Copy;
     const MAX_W: u64;
-    const EMPTY_VALUE: u64;
+    const EMPTY_VALUE: Self::Storage;
     const MAX_CARGO_BIT_WIDTH: usize;
 
     fn new() -> Self;
     fn components(&self) -> SlotComponents<Self>;
     fn cmpxchg(
         &self,
-        old_value: u64,
-        old_count: u64,
+        old: SlotComponents<Self>,
         item: Option<Self::Item>,
         new_count: u64,
     ) -> Result<Option<Self::Item>, Option<Self::Item>>;
-    fn is_empty(components: &SlotComponents<Self>) -> bool;
+    fn is_empty(components: Self::Storage) -> bool;
     fn extract_count(value: Self::Storage) -> u64;
-    fn extract_value(value: Self::Storage) -> u64;
+    fn put_count(container: Self::Storage, count: u64) -> Self::Storage;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,12 +44,29 @@ where
         Self { value }
     }
 
+    pub(crate) fn raw(&self) -> S::Storage {
+        self.value
+    }
+
     pub(crate) fn get_count(&self) -> u64 {
         S::extract_count(self.value)
     }
 
-    pub(crate) fn get_value(&self) -> u64 {
-        S::extract_value(self.value)
+    pub(crate) fn put_count(&mut self, count: u64) {
+        self.value = S::put_count(self.value, count)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn with_count<F>(&mut self, mut f: F)
+    where
+        F: FnMut(u64) -> u64,
+    {
+        self.put_count(f(self.get_count()));
+    }
+
+    pub(crate) fn set_empty(&mut self) {
+        let new = S::EMPTY_VALUE;
+        self.value = S::put_count(new, S::extract_count(self.value));
     }
 }
 
@@ -81,11 +97,16 @@ cfg_atomic_tagged64! {
             type Item = T;
             type Storage = u64;
             const MAX_W: u64 = u16::MAX as u64 / 2 + 1;
-            const EMPTY_VALUE: u64 = 0;
+            const EMPTY_VALUE: Self::Storage = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
             fn new() -> Self {
-                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH, "the stored item must be representable with 48 or less bits") };
+                const {
+                    assert!(
+                        Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH,
+                        "the stored item must be representable with 48 or less bits"
+                    )
+                };
                 Self {
                     state: AtomicU64::new(0),
                     _data: PhantomData,
@@ -93,68 +114,63 @@ cfg_atomic_tagged64! {
             }
 
             fn components(&self) -> SlotComponents<Self> {
-                // let (upper, lower) =
-                //     unpack!((self.state.load(Ordering::Acquire)): NON_COUNT_BITS);
                 SlotComponents::new(self.state.load(Ordering::Acquire))
             }
 
             fn cmpxchg(
                 &self,
-                old_value: u64,
-                old_count: u64,
+                old: SlotComponents<Self>,
                 new_value: Option<T>,
                 new_count: u64,
             ) -> Result<Option<T>, Option<T>> {
-                let old = pack!((old_count, old_value): NON_COUNT_BITS);
                 let new_trunc = new_value.map(|v| AsPackedValue::encode(v));
-                let new =
-                    pack!((new_count, new_trunc.map_or(Self::EMPTY_VALUE, |v| v.read() | (1 << (NON_COUNT_BITS - 1)))): NON_COUNT_BITS);
+                let new = pack!((new_count, new_trunc.map_or(Self::EMPTY_VALUE, |v| v.read() | (1 << (NON_COUNT_BITS - 1)))): NON_COUNT_BITS);
 
                 self.state
                     .compare_exchange(
-                        old,
+                        old.raw(),
                         new,
                         core::sync::atomic::Ordering::AcqRel,
                         core::sync::atomic::Ordering::Relaxed,
                     )
                     .map(|cargo| {
-                        NonZeroTruncatedU64::new(cargo).map(|v| {
+                        (!Self::is_empty(cargo)).then(||
                             // Safety:
-                            // TODO
-                            unsafe { AsPackedValue::decode(v) }
-                        })
+                            // we just checked that a value is contained in cargo. This value is decoded only once, here
+                            unsafe { AsPackedValue::decode(TruncatedU64::new(cargo)) },
+                        )
                     })
                     .map_err(|_| {
                         new_trunc.map(|v| {
                             // Safety:
-                            // TODO
+                            // this value got passed in new_value
                             unsafe { AsPackedValue::decode(v) }
                         })
                     })
             }
 
-            fn is_empty(components: &SlotComponents<Self>) -> bool {
-                components.get_value() >> MAX_CARGO_BIT_WIDTH == 0
-            }
-
-            fn extract_value(value: Self::Storage) -> u64 {
-                unpack!((value): NON_COUNT_BITS).1
+            fn is_empty(components: Self::Storage) -> bool {
+                components & (1 << (NON_COUNT_BITS - 1)) == 0
             }
 
             fn extract_count(value: Self::Storage) -> u64 {
                 unpack!((value): NON_COUNT_BITS).0
+            }
+
+            fn put_count(container: Self::Storage, count: u64) -> Self::Storage {
+                pack!((count, unpack!((container): NON_COUNT_BITS).1): NON_COUNT_BITS)
             }
         }
 
         impl<T: AsPackedValue> Drop for Tagged64<T> {
             fn drop(&mut self) {
                 let components = self.components();
-                let _cargo: Option<T> =
-                    NonZeroTruncatedU64::new(components.get_value()).map(|v| {
-                        // Safety:
-                        // TODO
-                        unsafe { AsPackedValue::decode(v) }
-                    });
+                let _cargo: Option<T> = (!Self::is_empty(components.raw())).then(||
+                    // Safety:
+                    // we just checked that we have a stored item.
+                    // this item is decoded the once and dropped
+                    unsafe { AsPackedValue::decode(TruncatedU64::new(components.raw())) },
+                );
             }
         }
 
@@ -182,12 +198,11 @@ cfg_atomic_tagged128! {
         use super::*;
 
         const MAX_CARGO_BIT_WIDTH: usize = 64;
+        const NON_COUNT_BITS: usize = MAX_CARGO_BIT_WIDTH + 1;
 
         // this slot stores the item in a tagged U128 value.
         // `count` takes up the upper 63 bits and `item` takes up the lower 64 bits.
         // this leaves 1 bit of state, which is used to encode `empty` vs `full`
-        // TODO: this requires, that the state be part of count, which requires different handling of SlotComponents.
-        // Currently: 64 bit count, 64 bit value, not 0 storable
 
         pub struct Tagged128<T: AsPackedValue> {
             storage: AtomicU128,
@@ -198,11 +213,16 @@ cfg_atomic_tagged128! {
             type Item = T;
             type Storage = u128;
             const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
-            const EMPTY_VALUE: u64 = 0;
+            const EMPTY_VALUE: Self::Storage = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
             fn new() -> Self {
-                const { assert!(Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH, "the stored item must be representable with 64 or less bits") };
+                const {
+                    assert!(
+                        Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH,
+                        "the stored item must be representable with 64 or less bits"
+                    )
+                };
                 Self {
                     storage: AtomicU128::new(0),
                     _data: PhantomData,
@@ -210,71 +230,65 @@ cfg_atomic_tagged128! {
             }
 
             fn components(&self) -> SlotComponents<Self> {
-                // let (upper, lower) = unpack!((self.storage.load(Ordering::Acquire)): 64);
-                // SlotComponents {
-                //     count: upper as u64,
-                //     state: lower as u64,
-                // }
                 SlotComponents::new(self.storage.load(Ordering::Acquire))
             }
 
             fn cmpxchg(
                 &self,
-                old_value: u64,
-                old_count: u64,
+                old: SlotComponents<Self>,
                 item: Option<Self::Item>,
                 new_count: u64,
             ) -> Result<Option<Self::Item>, Option<Self::Item>> {
-                let old = pack!((old_count as u128, old_value as u128): 64);
                 let new_trunc = item.map(|v| AsPackedValue::encode(v));
-                let new = pack!((new_count as u128, new_trunc.map_or(0, |v| v.read()) as u128): 64);
+                let new = pack!((new_count as u128, new_trunc.map_or(Self::EMPTY_VALUE, |v| v.read() as u128 | (1 << (NON_COUNT_BITS - 1)))): NON_COUNT_BITS);
 
                 self.storage
                     .compare_exchange(
-                        old,
+                        old.raw(),
                         new,
                         core::sync::atomic::Ordering::AcqRel,
                         core::sync::atomic::Ordering::Relaxed,
                     )
                     .map(|cargo| {
-                        NonZeroTruncatedU64::new(cargo as u64).map(|v| {
+                        (!Self::is_empty(cargo)).then(||
                             // Safety:
-                            // TODO
-                            unsafe { AsPackedValue::decode(v) }
-                        })
+                            // we just checked that cargo is not empty.
+                            // we can simply truncate to u64, since the whole item lives in the lower 64 bits
+                            unsafe { AsPackedValue::decode(TruncatedU64::new(cargo as u64)) },
+                        )
                     })
                     .map_err(|_| {
                         new_trunc.map(|v| {
                             // Safety:
-                            // TODO
+                            // we got passed this value
                             unsafe { AsPackedValue::decode(v) }
                         })
                     })
             }
 
-            fn is_empty(components: &SlotComponents<Self>) -> bool {
-                (components.get_count() & 1) == 0
-            }
-
-            fn extract_value(value: Self::Storage) -> u64 {
-                // unpack!((value): Self::MAX_CARGO_BIT_WIDTH).1 as u64
-                value as u64
+            fn is_empty(components: Self::Storage) -> bool {
+                components & (1 << (NON_COUNT_BITS - 1)) == 0
             }
 
             fn extract_count(value: Self::Storage) -> u64 {
-                unpack!((value): Self::MAX_CARGO_BIT_WIDTH).0 as u64 >> 1
+                unpack!((value): NON_COUNT_BITS).0 as u64
+            }
+
+            fn put_count(container: Self::Storage, count: u64) -> Self::Storage {
+                pack!((count as u128, unpack!((container): NON_COUNT_BITS).1): NON_COUNT_BITS)
             }
         }
 
         impl<T: AsPackedValue> Drop for Tagged128<T> {
             fn drop(&mut self) {
                 let components = self.components();
-                let _cargo: Option<T> =
-                    NonZeroTruncatedU64::new(components.get_value()).map(|v| {
-                        //Safety:
-                        // TODO
-                        unsafe { AsPackedValue::decode(v) }
-                    });
+                let _cargo: Option<T> = (!Self::is_empty(components.raw())).then(||
+                    // Safety:
+                    // we juts checked that an item is stored.
+                    // we decode this once and drop it.
+                    // we can truncate to u64, since item is stored in the lower 64 bits
+                    unsafe { AsPackedValue::decode(TruncatedU64::new(components.raw() as u64)) },
+                );
             }
         }
 

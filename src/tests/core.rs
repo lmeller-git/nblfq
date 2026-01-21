@@ -1,5 +1,6 @@
 use crate::tests::test_library::{
-    len, len_empty_full, linearizable, mpmc, mpmc_ring_buffer, mpsc, smoke, smoke_long, spsc,
+    len, len_empty_full, linearizable, mpmc, mpmc_ring_buf_ptr, mpmc_ring_buffer, mpsc, smoke,
+    smoke_long, spsc,
 };
 
 cfg_atomic_tagged64! {
@@ -65,6 +66,13 @@ cfg_atomic_tagged64! {
         fn linearizable_impl() {
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
             linearizable(q);
+        }
+
+        #[cfg(any(target_arch =  "x86_64", not(target_pointer_width = "64")))]
+        #[test]
+        fn mpmc_ring_buf_ptr_impl() {
+            let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
+            mpmc_ring_buf_ptr(q);
         }
     }
 }
@@ -132,6 +140,12 @@ cfg_atomic_tagged128! {
         fn linearizable_impl() {
             let q: QueueCore<BoxedBuffer<Tagged128<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
             linearizable(q);
+        }
+
+        #[test]
+        fn mpmc_ring_buf_ptr_impl() {
+            let q: QueueCore<BoxedBuffer<Tagged128<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
+            mpmc_ring_buf_ptr(q);
         }
     }
 }

@@ -57,7 +57,9 @@ where
                 let prev_components = prev_item.components();
                 let current_componets = current_item.components();
 
-                if !B::Slot::is_empty(&prev_components) && B::Slot::is_empty(&current_componets) {
+                if !B::Slot::is_empty(prev_components.raw())
+                    && B::Slot::is_empty(current_componets.raw())
+                {
                     break prev_components;
                 }
 
@@ -68,13 +70,14 @@ where
                     current_componets.get_count(),
                     B::Slot::MAX_W,
                 ) {
-                    if B::Slot::is_empty(&prev_components) && B::Slot::is_empty(&current_componets)
+                    if B::Slot::is_empty(prev_components.raw())
+                        && B::Slot::is_empty(current_componets.raw())
                     {
                         // empty list
                         break prev_components;
                     }
-                    if !B::Slot::is_empty(&prev_components)
-                        && !B::Slot::is_empty(&current_componets)
+                    if !B::Slot::is_empty(prev_components.raw())
+                        && !B::Slot::is_empty(current_componets.raw())
                     {
                         // list full
                         return Err(item);
@@ -85,7 +88,7 @@ where
 
             // at this point components is prev(current_component)
             let mut new_counter = components.get_count();
-            if B::Slot::is_empty(&components) {
+            if B::Slot::is_empty(components.raw()) {
                 // empty list
                 new_counter = (new_counter + B::Slot::MAX_W - 1) % B::Slot::MAX_W;
             }
@@ -95,12 +98,16 @@ where
                 new_counter = (new_counter + 1) % B::Slot::MAX_W;
             }
 
+            let mut expected = components;
+            expected.set_empty();
+            expected.put_count(new_counter);
+
             item = if let Err(Some(item)) = self
                 .buffer
                 .inner()
                 .get(head)
                 .expect("QueueCore.head is out of bounds. This is a Bug.")
-                .cmpxchg(B::Slot::EMPTY_VALUE, new_counter, Some(item), new_counter)
+                .cmpxchg(expected, Some(item), new_counter)
             {
                 item
             } else {
@@ -134,19 +141,16 @@ where
                     (current_components, current_item.components());
             }
 
-            if B::Slot::is_empty(&prev_components) && B::Slot::is_empty(&current_components) {
+            if B::Slot::is_empty(prev_components.raw())
+                && B::Slot::is_empty(current_components.raw())
+            {
                 // empty queue
                 return None;
             }
 
             let next_count = (current_components.get_count() + 1) % B::Slot::MAX_W;
 
-            if let Ok(item) = current_item.cmpxchg(
-                current_components.get_value(),
-                current_components.get_count(),
-                None,
-                next_count,
-            ) {
+            if let Ok(item) = current_item.cmpxchg(current_components, None, next_count) {
                 self.tail
                     .store((tail + 1) % self.buffer.capacity(), Ordering::Release);
                 debug_assert!(item.is_some(), "we popped an empty item from the queue");
@@ -174,7 +178,7 @@ where
                 .get(head)
                 .expect("head outside of cap")
                 .components();
-            if B::Slot::is_empty(&components) {
+            if B::Slot::is_empty(components.raw()) {
                 // empty
                 0
             } else {

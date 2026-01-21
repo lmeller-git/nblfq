@@ -322,3 +322,56 @@ where
         }
     })
 }
+
+pub(crate) fn mpmc_ring_buf_ptr<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = Box<usize>> + Sync,
+{
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
+    const COUNT: usize = 25_000;
+    const THREADS: usize = 2;
+
+    let t = AtomicUsize::new(THREADS);
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                loop {
+                    match t.load(Ordering::SeqCst) {
+                        0 => {
+                            while let Some(n) = q.pop() {
+                                v[*n].fetch_add(1, Ordering::SeqCst);
+                            }
+                            break;
+                        }
+
+                        _ => {
+                            while let Some(n) = q.pop() {
+                                v[*n].fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    q.force_push_and_do(Box::new(i), |n| {
+                        v[*n].fetch_add(1, Ordering::SeqCst);
+                    })
+                }
+
+                t.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+    });
+
+    for c in v {
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
+    }
+}
