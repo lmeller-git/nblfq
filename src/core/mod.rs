@@ -8,7 +8,7 @@ pub(crate) mod packed;
 pub(crate) mod queue;
 pub(crate) mod slot;
 
-pub use packed::{AsPackedValue, NonZeroTruncatedU64};
+pub use packed::{AsPackedValue, TruncatedU64};
 
 pub mod slots {
     //! Module containing types used to determine the underlying storage type in nblf-queue Queues.
