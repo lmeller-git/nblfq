@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 description = "Atomic, wait-free MPMC queues based on the nblfq algorithm"
 license = "MIT"
+repository = "https://github.com/lmeller-git/nblf-queue"
+keywords = ["queue", "wait-free", "no_std", "atomic", "lock-free"]
+categories = ["data-structures", "algorithms", "concurrency", "no-std"]
 
 [features]
 default = ["pool"]
