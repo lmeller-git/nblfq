@@ -8,6 +8,12 @@ repository = "https://github.com/lmeller-git/nblf-queue"
 keywords = ["queue", "no_std", "atomic", "lock-free"]
 categories = ["data-structures", "algorithms", "concurrency", "no-std"]
 
+[workspace]
+members = [
+  ".",
+  "profiling"
+]
+
 [features]
 default = ["pool"]
 std = ["alloc"]
