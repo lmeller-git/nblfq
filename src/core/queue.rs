@@ -1,3 +1,5 @@
+use crossbeam_utils::CachePadded;
+
 use crate::{
     MPMCQueue,
     core::{buffer::Buffer, slot::Slot},
@@ -13,21 +15,21 @@ pub(crate) struct QueueCore<B: Buffer> {
     /// This value indicates the next slot that can be pushed to.
     ///
     /// This value may be stale and must be checked for critical operations.
-    head: AtomicUsize,
+    head: CachePadded<AtomicUsize>,
     /// The tail of the queue.
     ///
     /// This value indicates the next slot that can be popped from.
     ///
     /// This value may be stale and must be checked for critical operations.
-    tail: AtomicUsize,
+    tail: CachePadded<AtomicUsize>,
 }
 
 impl<B: Buffer> QueueCore<B> {
     pub(crate) fn new_in(buffer: B) -> Self {
         Self {
             buffer,
-            head: AtomicUsize::new(0),
-            tail: AtomicUsize::new(0),
+            head: AtomicUsize::new(0).into(),
+            tail: AtomicUsize::new(0).into(),
         }
     }
 }
