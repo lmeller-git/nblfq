@@ -54,7 +54,7 @@ where
             .get(next_free.idx)
             .expect("popped an invalid index from self.free_slots. This is a bug.");
         // SAFETY:
-        // The caller has to guarantee that each index is unique, i.e. that only one thread may own an index at a time.
+        // Each index in the Index queue is unique exists as only one instance. If we own this Index, no other thread has it
         cell.with_mut(|c| unsafe { &mut *c }.replace(item));
         Ok(next_free)
     }
@@ -62,7 +62,7 @@ where
     fn deallocate(&self, idx: OwnedIdx) -> Option<T> {
         let slot = self.data.inner().get(idx.idx)?;
         // SAFETY:
-        // The caller has to guarantee that each index is unique, i.e. that only one thread may own an index at a time.
+        // Each index in the Index queue is unique exists as only one instance. If we own this Index, no other thread has it
         let item = slot.with_mut(|c| unsafe { &mut *c }.take());
         _ = self.free_slots.push(ItemHandle::new(idx));
         item
@@ -90,18 +90,15 @@ where
 {
 }
 
+/// An owned !Copy !Clone version of a usize index
 #[derive(Debug)]
 struct OwnedIdx {
     idx: usize,
-    _phantom: PhantomData<[()]>, // [()] is !Copy
 }
 
 impl OwnedIdx {
     fn new(idx: usize) -> Self {
-        Self {
-            idx,
-            _phantom: PhantomData,
-        }
+        Self { idx }
     }
 }
 
