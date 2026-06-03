@@ -1,3 +1,6 @@
+#[cfg(feature = "pool")]
+pub use pooled_queue::*;
+
 use crate::{
     MPMCQueue,
     core::{
@@ -7,9 +10,6 @@ use crate::{
     },
     owned::buffer::BoxedBuffer,
 };
-
-#[cfg(feature = "pool")]
-pub use pooled_queue::*;
 
 /// A `MPMCQueue` over a heap-allocated array.
 ///
@@ -117,6 +117,7 @@ mod pooled_queue {
         S: SlotType<ItemHandle<T>>,
     {
         type Item = T;
+
         fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
             self.inner.push(item)
         }

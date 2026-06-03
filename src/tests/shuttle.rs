@@ -310,9 +310,8 @@ cfg_atomic_tagged128! {
 
 #[cfg(feature = "pool")]
 mod pool {
-    use crate::PooledQueue;
-
     use super::*;
+    use crate::PooledQueue;
 
     #[test]
     fn spsc_impl() {

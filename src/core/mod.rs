@@ -67,6 +67,7 @@ pub mod slots {
             all(feature = "atomic-fallback", not(target_endian = "little"))
         ))]
         type Slot = slot::Tagged128<T>;
+
         #[cfg(all(
             not(any(target_has_atomic = "64", feature = "atomic-fallback")),
             not(target_has_atomic = "128")

@@ -1,6 +1,14 @@
 use crate::tests::test_library::{
-    len, len_empty_full, linearizable, mpmc, mpmc_ring_buf_ptr, mpmc_ring_buffer, mpsc, smoke,
-    smoke_long, spsc,
+    len,
+    len_empty_full,
+    linearizable,
+    mpmc,
+    mpmc_ring_buf_ptr,
+    mpmc_ring_buffer,
+    mpsc,
+    smoke,
+    smoke_long,
+    spsc,
 };
 
 cfg_atomic_tagged64! {
@@ -216,9 +224,8 @@ mod pool {
 }
 
 mod array {
-    use crate::array::StaticQueue;
-
     use super::*;
+    use crate::array::StaticQueue;
 
     #[test]
     fn smoke_impl() {
@@ -241,9 +248,8 @@ mod array {
 
 #[cfg(feature = "alloc")]
 mod owned {
-    use crate::owned::Queue;
-
     use super::*;
+    use crate::owned::Queue;
 
     #[test]
     fn smoke_impl() {
@@ -265,9 +271,8 @@ mod owned {
 
     #[cfg(feature = "pool")]
     mod pool {
-        use crate::owned::PooledQueue;
-
         use super::*;
+        use crate::owned::PooledQueue;
 
         #[test]
         fn smoke_impl() {

@@ -1,3 +1,6 @@
+#[cfg(feature = "pool")]
+pub use pooled_static::*;
+
 use crate::{
     MPMCQueue,
     array::buffer::ArrayBuf,
@@ -7,9 +10,6 @@ use crate::{
         slots::{Auto, SlotType},
     },
 };
-
-#[cfg(feature = "pool")]
-pub use pooled_static::*;
 
 /// A `MPMCQueue` with capacity `N`.
 ///
@@ -81,9 +81,8 @@ where
 
 #[cfg(feature = "pool")]
 mod pooled_static {
-    use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
-
     use super::*;
+    use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
 
     /// A pooled `MPMCQueue` with capacity `N`.
     ///
@@ -131,6 +130,7 @@ mod pooled_static {
         S: SlotType<ItemHandle<T>>,
     {
         type Item = T;
+
         fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
             self.inner.push(item)
         }

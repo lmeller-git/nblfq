@@ -1,6 +1,7 @@
-use crate::MPMCQueue;
-
-use crate::sync::{Arc, thread};
+use crate::{
+    MPMCQueue,
+    sync::{Arc, thread},
+};
 
 // TODO add more tests, however even simple tests are already too large...
 
@@ -75,9 +76,8 @@ cfg_atomic_tagged128! {
 
 #[cfg(feature = "pool")]
 mod pooled {
-    use crate::PooledQueue;
-
     use super::*;
+    use crate::PooledQueue;
 
     #[test]
     fn linearizable_impl() {

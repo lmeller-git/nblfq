@@ -1,17 +1,17 @@
-use criterion::{Criterion, criterion_group, criterion_main};
-#[cfg(all(bench_crossbeam, feature = "alloc"))]
-use crossbeam_queue::ArrayQueue;
-use nblf_queue::{MPMCQueue, PooledStaticQueue, StaticQueue};
-#[cfg(feature = "alloc")]
-use nblf_queue::{PooledQueue, Queue};
 use std::{
     hint::{black_box, spin_loop},
     sync::atomic::{AtomicU64, Ordering},
     thread,
 };
 
+use criterion::{Criterion, criterion_group, criterion_main};
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
 use crossbeam_::*;
+#[cfg(all(bench_crossbeam, feature = "alloc"))]
+use crossbeam_queue::ArrayQueue;
+use nblf_queue::{MPMCQueue, PooledStaticQueue, StaticQueue};
+#[cfg(feature = "alloc")]
+use nblf_queue::{PooledQueue, Queue};
 
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
 mod crossbeam_ {
@@ -27,6 +27,7 @@ mod crossbeam_ {
 
     impl<T> MPMCQueue for CrossbeamWrapper<T> {
         type Item = T;
+
         fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
             self.0.push(item)
         }
