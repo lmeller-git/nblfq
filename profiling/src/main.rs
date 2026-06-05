@@ -4,6 +4,7 @@ use std::{
     hint::{black_box, spin_loop},
     sync::atomic::{AtomicU64, Ordering},
     thread,
+    time::Instant,
 };
 
 use nblf_queue::{MPMCQueue, PooledQueue, Queue};
@@ -13,9 +14,18 @@ const THREADS: u64 = 3;
 const ITEMS_PER_THREAD: u64 = TOTAL_ITEMS / THREADS;
 const CAP: usize = 64;
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 fn main() {
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
+
+    let now = Instant::now();
     let q = Queue::new(CAP);
     run_mpmc(q);
+    println!("completed run in {:.2}", now.elapsed().as_secs_f64())
 }
 
 fn run_spsc<Q>(q: Q)

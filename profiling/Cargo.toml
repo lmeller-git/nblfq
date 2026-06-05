@@ -3,6 +3,10 @@ name = "profiling"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+dhat-heap = ["dhat"]
+
 [dependencies]
 nblf-queue = { path = "..", features = ["std"] }
-
+dhat = { version = "0.3.3", optional = true }
