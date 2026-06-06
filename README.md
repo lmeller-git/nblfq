@@ -6,6 +6,8 @@
 
 # nblf-queue
 
+> Non-Blocking Lock-Free Queue
+
 An atomic lock-free MPMC queue based on the NBLFQ algorithm.
 
 This repository provides multiple queue implementations with different storage and allocation strategies.
