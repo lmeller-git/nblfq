@@ -9,9 +9,13 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use crossbeam_::*;
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
 use crossbeam_queue::ArrayQueue;
-use nblf_queue::{MPMCQueue, PooledStaticQueue, StaticQueue};
+#[cfg(all(feature = "alloc", feature = "pool"))]
+use nblf_queue::PooledQueue;
+#[cfg(feature = "pool")]
+use nblf_queue::PooledStaticQueue;
 #[cfg(feature = "alloc")]
-use nblf_queue::{PooledQueue, Queue};
+use nblf_queue::Queue;
+use nblf_queue::{MPMCQueue, StaticQueue};
 
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
 mod crossbeam_ {
@@ -155,6 +159,8 @@ fn bench_throughput_spsc(c: &mut Criterion) {
         group.bench_with_input(format!("StaticQueue | size={size}"), &input, |b, i| {
             b.iter(|| simple_sender::<StaticQueue<_, 64>>(StaticQueue::new(), i))
         });
+
+        #[cfg(feature = "pool")]
         group.bench_with_input(
             format!("PooledStaticQueue | size={size}"),
             &input,
@@ -180,6 +186,7 @@ fn bench_throughput_mpsc(c: &mut Criterion) {
     group.bench_function("StaticQueue", |b| {
         b.iter(|| run_queue_mpsc::<StaticQueue<_, 64>>(StaticQueue::new()))
     });
+    #[cfg(feature = "pool")]
     group.bench_function("PooledStaticQueue", |b| {
         b.iter(|| run_queue_mpsc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()))
     });
@@ -197,6 +204,7 @@ fn bench_throughput_mpmc(c: &mut Criterion) {
     group.bench_function("simple throughput static queue", |b| {
         b.iter(|| run_queue_mpmc::<StaticQueue<_, 64>>(StaticQueue::new()))
     });
+    #[cfg(feature = "pool")]
     group.bench_function("simple throughput pooled static queue", |b| {
         b.iter(|| run_queue_mpmc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()))
     });
@@ -218,10 +226,11 @@ fn bench_throughput_mpmc_cap(c: &mut Criterion) {
         group.bench_function(format!("Queue | cap={cap}"), |b| {
             b.iter(|| run_queue_mpmc(Queue::new(cap)))
         });
+        #[cfg(feature = "pool")]
         group.bench_function(format!("PooledQueue | cap={cap}"), |b| {
             b.iter(|| run_queue_mpmc(PooledQueue::new(cap)))
         });
-        #[cfg(all(bench_crossbeam, feature = "alloc"))]
+        #[cfg(bench_crossbeam)]
         group.bench_function(format!("crossbeam_queue::ArrayQueue | cap={cap}"), |b| {
             b.iter(|| run_queue_mpmc(CrossbeamWrapper::new(cap)))
         });
@@ -234,6 +243,7 @@ fn bench_push_pop(c: &mut Criterion) {
     group.bench_function("StaticQueue", |b| {
         b.iter(|| run_queue_single_thread::<StaticQueue<_, 2>>(StaticQueue::new()))
     });
+    #[cfg(feature = "pool")]
     group.bench_function("PooledStaticQueue", |b| {
         b.iter(|| run_queue_single_thread::<PooledStaticQueue<_, 2>>(PooledStaticQueue::new()))
     });
