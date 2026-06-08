@@ -17,7 +17,7 @@ All queues in this repository are safe to use in a concurrent context and will n
 ## Queue variants
 
 - **Static queues**: fixed-capacity queues backed by static storage
-- **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on fature `alloc`
+- **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on feature `alloc`
 - **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`
 
 Non-pooled queues store items in atomically updated slots, restricting the stored items to small, pointer-like values.
@@ -90,9 +90,20 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 
 - `pool`: Enables pooled queues, which may store any type
 
-- `atomic-fallback`: Uses `portable-atomic` `fallback` for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks
+- `atomic-fallback`: Uses `portable-atomic` `fallback` feature for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks
 
 - `default`: `pool`
+
+## Testing
+
+The core test-suite of this crate was adapted from [`crossbeam-queue`](https://github.com/crossbeam-rs/crossbeam/tree/main/crossbeam-queue).
+
+Current testing is based on:
+
+- **Miri** - to validate pointer arithmetic
+- **Loom and Shuttle** - to test for race conditions
+- **ASan** - to check for memory corruption and leakage
+
 
 ## References
 
