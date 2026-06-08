@@ -2,11 +2,17 @@
 name = "nblf-queue"
 version = "0.1.0"
 edition = "2024"
+authors = ["Louis Meller louis.meller@icloud.com"]
 description = "Atomic, wait-free MPMC queues based on the nblfq algorithm"
+documentation = "https://docs.rs/nblf-queue"
+readme = "README.md"
 license = "MIT"
 repository = "https://github.com/lmeller-git/nblf-queue"
-keywords = ["queue", "no_std", "atomic", "lock-free"]
+keywords = ["queue", "mpmc", "no_std", "atomic", "lock-free"]
 categories = ["data-structures", "algorithms", "concurrency", "no-std"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [workspace]
 members = [
