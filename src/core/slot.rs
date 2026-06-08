@@ -104,6 +104,11 @@ cfg_atomic_tagged64! {
                         "the stored item must be representable with 48 or less bits"
                     )
                 };
+
+                if Self::MAX_CARGO_BIT_WIDTH < size_of::<T>() * 8 && !<T as AsPackedValue>::is_rt_safe() {
+                    panic!("Trying to store a type that is not encodeable in a packed 64bit slot (48 bits) is unsafe");
+                }
+
                 Self {
                     state: AtomicU64::new(0),
                     _data: PhantomData,
@@ -220,6 +225,11 @@ cfg_atomic_tagged128! {
                         "the stored item must be representable with 64 or less bits"
                     )
                 };
+
+                if Self::MAX_CARGO_BIT_WIDTH < size_of::<T>() * 8 && !<T as AsPackedValue>::is_rt_safe() {
+                    panic!("Trying to store a type that is not encodeable in a packed 128bit slot (64 bits) is unsafe");
+                }
+
                 Self {
                     storage: AtomicU128::new(0),
                     _data: PhantomData,

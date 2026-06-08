@@ -134,7 +134,7 @@ where
     #[cfg(miri)]
     const COUNT: usize = 50;
     #[cfg(not(miri))]
-    const COUNT: usize = 100_000;
+    const COUNT: usize = 300_000;
 
     scope(|scope| {
         scope.spawn(|| {
@@ -164,7 +164,7 @@ where
     #[cfg(miri)]
     const COUNT: usize = 10;
     #[cfg(not(miri))]
-    const COUNT: usize = 10_000;
+    const COUNT: usize = 30_000;
     const THREADS: usize = 4;
 
     let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
@@ -201,7 +201,7 @@ where
     #[cfg(miri)]
     const COUNT: usize = 50;
     #[cfg(not(miri))]
-    const COUNT: usize = 25_000;
+    const COUNT: usize = 75_000;
     const THREADS: usize = 4;
 
     let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
@@ -240,7 +240,7 @@ where
     #[cfg(miri)]
     const COUNT: usize = 50;
     #[cfg(not(miri))]
-    const COUNT: usize = 25_000;
+    const COUNT: usize = 75_000;
     const THREADS: usize = 2;
 
     let t = AtomicUsize::new(THREADS);
@@ -330,7 +330,7 @@ where
     #[cfg(miri)]
     const COUNT: usize = 50;
     #[cfg(not(miri))]
-    const COUNT: usize = 25_000;
+    const COUNT: usize = 75_000;
     const THREADS: usize = 2;
 
     let t = AtomicUsize::new(THREADS);

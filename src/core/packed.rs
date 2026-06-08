@@ -25,6 +25,11 @@ pub unsafe trait AsPackedValue: Sized {
     /// # SAFETY
     /// The caller must ensure that the passed value is a valid value returned by `encode`
     unsafe fn decode(raw: TruncatedU64<Self>) -> Self;
+
+    /// Validates wether self is actually safe to pack into Self::MIN_BIT_WIDTH bits at runtime.
+    fn is_rt_safe() -> bool {
+        true
+    }
 }
 
 /// An U64, with the upper N bits set to 0.
@@ -137,15 +142,16 @@ unsafe impl AsPackedValue for () {
 mod x86_64 {
     use super::*;
 
-    #[cfg(debug_assertions)]
-    fn assert_ptr_safety<T>(raw: *const T) {
+    fn assert_ptr_safety() {
+        let dummy = 42;
+        let raw = &dummy as *const i32;
         let addr = raw as u64;
         let top_16 = addr >> 48;
         let bit_47 = (addr >> 47) & 1;
 
         assert!(
             (bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF),
-            "Pointer {:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue or a newtype and Tagged128 Slot.",
+            "Pointer {:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue or a Tagged128 Slot.",
             raw
         );
     }
@@ -161,14 +167,16 @@ mod x86_64 {
         const MIN_BIT_WIDTH: usize = 48;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
-            #[cfg(debug_assertions)]
-            assert_ptr_safety(zelf);
-
             TruncatedU64::new(zelf as u64)
         }
 
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             crate::utils::sign_extend(raw.read()) as *const T
+        }
+
+        fn is_rt_safe() -> bool {
+            assert_ptr_safety();
+            true
         }
     }
 
@@ -183,14 +191,16 @@ mod x86_64 {
         const MIN_BIT_WIDTH: usize = 48;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
-            #[cfg(debug_assertions)]
-            assert_ptr_safety(zelf as *const T);
-
             TruncatedU64::new(zelf as u64)
         }
 
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             crate::utils::sign_extend(raw.read()) as *mut T
+        }
+
+        fn is_rt_safe() -> bool {
+            assert_ptr_safety();
+            true
         }
     }
 
@@ -205,15 +215,17 @@ mod x86_64 {
         const MIN_BIT_WIDTH: usize = 48;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
-            #[cfg(debug_assertions)]
-            assert_ptr_safety(zelf.as_ptr());
-
             TruncatedU64::new(zelf.as_ptr() as u64)
         }
 
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             Self::new(crate::utils::sign_extend(raw.read()) as *mut T)
                 .expect("tried to recosntruct a NonNull from 0")
+        }
+
+        fn is_rt_safe() -> bool {
+            assert_ptr_safety();
+            true
         }
     }
 
@@ -225,9 +237,6 @@ mod x86_64 {
         const MIN_BIT_WIDTH: usize = 48;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
-            #[cfg(debug_assertions)]
-            assert_ptr_safety(zelf as *const T);
-
             TruncatedU64::new(zelf as *const T as u64)
         }
 
@@ -235,6 +244,11 @@ mod x86_64 {
             // Safety:
             // The caller must ensure that this is called on a value created by `encode` and the reference is still valid
             unsafe { &*(crate::utils::sign_extend(raw.read()) as *const T) }
+        }
+
+        fn is_rt_safe() -> bool {
+            assert_ptr_safety();
+            true
         }
     }
 
@@ -246,9 +260,6 @@ mod x86_64 {
         const MIN_BIT_WIDTH: usize = 48;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
-            #[cfg(debug_assertions)]
-            assert_ptr_safety(zelf as *const T);
-
             TruncatedU64::new(zelf as *mut T as u64)
         }
 
@@ -256,6 +267,11 @@ mod x86_64 {
             // Safety:
             // The caller must ensure that this is called only once on a value created by `encode` and the reference is still valid
             unsafe { &mut *(crate::utils::sign_extend(raw.read()) as *mut T) }
+        }
+
+        fn is_rt_safe() -> bool {
+            assert_ptr_safety();
+            true
         }
     }
 
@@ -278,9 +294,6 @@ mod x86_64 {
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = Box::into_raw(zelf);
-                #[cfg(debug_assertions)]
-                assert_ptr_safety(raw);
-
                 TruncatedU64::new(raw as u64)
             }
 
@@ -288,6 +301,11 @@ mod x86_64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Box::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                assert_ptr_safety();
+                true
             }
         }
 
@@ -300,9 +318,6 @@ mod x86_64 {
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = Rc::into_raw(zelf);
-                #[cfg(debug_assertions)]
-                assert_ptr_safety(raw);
-
                 TruncatedU64::new(raw as u64)
             }
 
@@ -310,6 +325,11 @@ mod x86_64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Rc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                assert_ptr_safety();
+                true
             }
         }
 
@@ -322,9 +342,6 @@ mod x86_64 {
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = Arc::into_raw(zelf);
-                #[cfg(debug_assertions)]
-                assert_ptr_safety(raw);
-
                 TruncatedU64::new(raw as u64)
             }
 
@@ -332,6 +349,11 @@ mod x86_64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Arc::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                assert_ptr_safety();
+                true
             }
         }
 
@@ -344,9 +366,6 @@ mod x86_64 {
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = rc::Weak::into_raw(zelf);
-                #[cfg(debug_assertions)]
-                assert_ptr_safety(raw);
-
                 TruncatedU64::new(raw as u64)
             }
 
@@ -354,6 +373,11 @@ mod x86_64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { rc::Weak::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                assert_ptr_safety();
+                true
             }
         }
 
@@ -366,9 +390,6 @@ mod x86_64 {
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = sync::Weak::into_raw(zelf);
-                #[cfg(debug_assertions)]
-                assert_ptr_safety(raw);
-
                 TruncatedU64::new(raw as u64)
             }
 
@@ -376,6 +397,11 @@ mod x86_64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { sync::Weak::from_raw(crate::utils::sign_extend(raw.read()) as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                assert_ptr_safety();
+                true
             }
         }
     }
@@ -565,27 +591,19 @@ mod full_bit64 {
     }
 }
 
-// assuming there are no pointer widths > 64 bits and all smaller widths are <= 32 bit.
 #[cfg(not(target_pointer_width = "64"))]
 mod bit32 {
     use core::num::NonZeroUsize;
 
     use super::*;
 
-    const _assert_ptr_size: () = const {
-        assert!(
-            core::mem::size_of::<usize>() * 8 <= 32,
-            "pointer width is larger than 32 bit. This implementation is not safe."
-        )
-    };
-
     // Safety:
-    // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+    // Casting from a ptr to a usize is safe
     unsafe impl<T> AsPackedValue for *const T
     where
         T: Sized,
     {
-        const MIN_BIT_WIDTH: usize = 32;
+        const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
             TruncatedU64::new(zelf as u64)
@@ -597,12 +615,12 @@ mod bit32 {
     }
 
     // Safety:
-    // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+    // Casting from a ptr to a usize is safe
     unsafe impl<T> AsPackedValue for *mut T
     where
         T: Sized,
     {
-        const MIN_BIT_WIDTH: usize = 32;
+        const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
             TruncatedU64::new(zelf as u64)
@@ -614,12 +632,12 @@ mod bit32 {
     }
 
     // Safety:
-    // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+    // Casting from a ptr to a usize is safe
     unsafe impl<T> AsPackedValue for NonNull<T>
     where
         T: Sized,
     {
-        const MIN_BIT_WIDTH: usize = 32;
+        const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
             TruncatedU64::new(zelf.as_ptr() as u64)
@@ -632,9 +650,9 @@ mod bit32 {
     }
 
     // Safety:
-    // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+    // Casting from a ptr to a usize is safe
     unsafe impl<T> AsPackedValue for &'static T {
-        const MIN_BIT_WIDTH: usize = 32;
+        const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
             TruncatedU64::new(zelf as *const T as u64)
@@ -648,9 +666,9 @@ mod bit32 {
     }
 
     // Safety:
-    // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+    // Casting from a ptr to a usize is safe
     unsafe impl<T> AsPackedValue for &'static mut T {
-        const MIN_BIT_WIDTH: usize = 32;
+        const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
         fn encode(zelf: Self) -> TruncatedU64<Self> {
             TruncatedU64::new(zelf as *mut T as u64)
@@ -674,9 +692,9 @@ mod bit32 {
         use super::*;
 
         // Safety:
-        // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+        // Casting from a ptr to a usize is safe
         unsafe impl<T> AsPackedValue for Box<T> {
-            const MIN_BIT_WIDTH: usize = 32;
+            const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 TruncatedU64::new(Box::into_raw(zelf) as u64)
@@ -690,9 +708,9 @@ mod bit32 {
         }
 
         // Safety:
-        // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+        // Casting from a ptr to a usize is safe
         unsafe impl<T> AsPackedValue for Rc<T> {
-            const MIN_BIT_WIDTH: usize = 32;
+            const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = Rc::into_raw(zelf);
@@ -707,9 +725,9 @@ mod bit32 {
         }
 
         // Safety:
-        // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+        // Casting from a ptr to a usize is safe
         unsafe impl<T> AsPackedValue for Arc<T> {
-            const MIN_BIT_WIDTH: usize = 32;
+            const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = Arc::into_raw(zelf);
@@ -724,9 +742,9 @@ mod bit32 {
         }
 
         // Safety:
-        // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+        // Casting from a ptr to a usize is safe
         unsafe impl<T> AsPackedValue for rc::Weak<T> {
-            const MIN_BIT_WIDTH: usize = 32;
+            const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = rc::Weak::into_raw(zelf);
@@ -741,9 +759,9 @@ mod bit32 {
         }
 
         // Safety:
-        // casting *const T from and to u32 is safe, if width of the ptr is <= 32 bits
+        // Casting from a ptr to a usize is safe
         unsafe impl<T> AsPackedValue for sync::Weak<T> {
-            const MIN_BIT_WIDTH: usize = 32;
+            const MIN_BIT_WIDTH: usize = size_of::<usize>() * 8;
 
             fn encode(zelf: Self) -> TruncatedU64<Self> {
                 let raw = sync::Weak::into_raw(zelf);

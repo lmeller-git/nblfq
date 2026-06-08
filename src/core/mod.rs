@@ -59,7 +59,7 @@ pub mod slots {
     impl<T: AsPackedValue> SlotType<T> for Auto {
         #[cfg(all(
             any(target_has_atomic = "64", feature = "atomic-fallback"),
-            not(target_has_atomic = "128")
+            not(any(target_has_atomic = "128", feature = "atomic-fallback"))
         ))]
         type Slot = slot::Tagged64<T>;
         #[cfg(any(target_has_atomic = "128", feature = "atomic-fallback"))]
