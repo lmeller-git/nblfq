@@ -62,10 +62,7 @@ pub mod slots {
             not(target_has_atomic = "128")
         ))]
         type Slot = slot::Tagged64<T>;
-        #[cfg(any(
-            target_has_atomic = "128",
-            all(feature = "atomic-fallback", not(target_endian = "little"))
-        ))]
+        #[cfg(any(target_has_atomic = "128", feature = "atomic-fallback"))]
         type Slot = slot::Tagged128<T>;
 
         #[cfg(all(

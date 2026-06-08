@@ -86,18 +86,18 @@ pub(crate) mod sealed {
     pub trait Sealed {}
 }
 
-// Safety:
-// width here is the bit-width taken up by the lower value
-// we assume that lower is already properly truncated
+/// # Safety:
+/// width here is the bit-width taken up by the lower value
+/// we assume that lower is already properly truncated
 macro_rules! pack {
     (($upper:expr, $lower:expr): $width:expr) => {
         (($upper) << $width) | ($lower)
     };
 }
 
-// Safety:
-// width is the bit-width taken up by the lower value
-// the value as produced by pack!() with the correct parameters
+/// # Safety:
+/// width is the bit-width taken up by the lower value
+/// the value as produced by pack!() with the correct parameters
 macro_rules! unpack {
     (($packed:expr): $width:expr) => {{
         // make sure to evaluate passed exprs only once
