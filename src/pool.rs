@@ -192,3 +192,15 @@ where
         self.q.capacity()
     }
 }
+
+// cover is_rt_safe for ItemHandle<T>. This is not covered in any other case, since only ItemHandle<()>, which is zero sized is ever used.
+#[cfg(test)]
+mod tests {
+    use super::ItemHandle;
+    use crate::core::AsPackedValue;
+
+    #[test]
+    fn true_is_true() {
+        assert!(ItemHandle::<()>::is_rt_safe())
+    }
+}
