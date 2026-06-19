@@ -137,9 +137,10 @@ unsafe impl AsPackedValue for () {
 
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
 
-// Some x86_64 based hardware has support for level 5 pagetables. These implementations are not safe on this hardware
-#[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
-mod x86_64 {
+/// Some x86_64 and aarch64 based hardware has support for level 5 pagetables / use more than 48 bits for pointers. These implementations are not safe on hardware using more that 48 bits for pointers.
+/// This invariant will be checked at runtime.
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+mod bit64 {
     use super::*;
 
     fn assert_ptr_safety() {
@@ -151,7 +152,7 @@ mod x86_64 {
 
         assert!(
             (bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF),
-            "Pointer {:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue or a Tagged128 Slot.",
+            "Pointer {:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits.",
             raw
         );
     }
@@ -407,7 +408,12 @@ mod x86_64 {
     }
 }
 
-#[cfg(all(not(target_arch = "x86_64"), target_pointer_width = "64"))]
+/// Cannot guarantee that all 64 bit architectures use 48bit pointers.
+#[cfg(all(
+    not(target_arch = "x86_64"),
+    not(target_arch = "aarch64"),
+    target_pointer_width = "64"
+))]
 mod full_bit64 {
     use super::*;
 
@@ -591,6 +597,7 @@ mod full_bit64 {
     }
 }
 
+/// if the native ptr-size is <= 48 bits, it is always safe to pack a ptr into 48 or more bits
 #[cfg(not(target_pointer_width = "64"))]
 mod bit32 {
     use core::num::NonZeroUsize;
