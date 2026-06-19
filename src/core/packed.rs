@@ -792,14 +792,16 @@ mod tests {
     use super::*;
 
     macro_rules! generate_test {
-        ($name:ident: $constructor:expr, $type:ty, $deref:expr) => {
+        ($name:ident: $constructor:expr, $type:ty, $deref:expr, $drop:expr) => {
             #[test]
             fn $name() {
                 #[allow(dead_code)]
                 static VALUE: i32 = 42;
                 const WIDTH: usize = <$type as AsPackedValue>::MIN_BIT_WIDTH;
 
-                let ptr1 = $constructor;
+                assert!(<$type>::is_rt_safe());
+
+                let ptr1: $type = $constructor;
                 let expected = $deref(&ptr1);
 
                 let mut encoded = AsPackedValue::encode(ptr1);
@@ -811,19 +813,29 @@ mod tests {
 
                 // Safety:
                 // we just encoded this value
-                let decoded = unsafe { AsPackedValue::decode(encoded) };
+                let decoded: $type = unsafe { AsPackedValue::decode(encoded) };
 
                 assert_eq!($deref(&decoded), expected);
+
+                #[allow(dropping_copy_types, dropping_references)]
+                $drop(decoded);
             }
         };
         ($name:ident: $constructor:expr, $type:ty) => {
-            generate_test!($name: $constructor, $type, |x: &$type| x.clone());
+            generate_test!($name: $constructor, $type, |x: &$type| x.clone(), drop);
         };
     }
 
     generate_test!(raw: &VALUE as *const i32, *const i32);
     generate_test!(raw_mut: &VALUE as *const i32 as *mut i32, *mut i32);
     generate_test!(r#ref: &VALUE, &'static i32);
+    // we cannot compare two mutable borrows to the same data. Since the addrs is the same across *const T and &mut T, we simply deref to *const T.
+    generate_test!(ref_mut: Box::leak(Box::new(VALUE)), & 'static mut i32, |x: &&'static mut i32| *x as *const i32,
+        |x: &'static mut i32|
+            // Safety:
+            // drop is only called once on the decoded value
+            unsafe {Box::from_raw(x as *mut i32)}
+    );
     generate_test!(nonnull: NonNull::new(&VALUE as *const i32 as *mut i32).unwrap(), NonNull<i32>);
     generate_test!(primitive_u32: 42, u32);
     generate_test!(primitive_nonzero_u32: NonZeroU32::new(42).unwrap(), NonZeroU32);
@@ -842,7 +854,7 @@ mod tests {
         generate_test!(r#box: Box::new(VALUE), Box<i32>);
         generate_test!(r#arc: Arc::new(VALUE), Arc<i32>);
         generate_test!(r#rc: Rc::new(VALUE), Rc<i32>);
-        generate_test!(weak_rc: Rc::downgrade(&Rc::new(VALUE)), rc::Weak<i32>, |x: &rc::Weak<i32>| x.as_ptr());
-        generate_test!(weak_arc: Arc::downgrade(&Arc::new(VALUE)), sync::Weak<i32>, |x: &sync::Weak<i32>| x.as_ptr());
+        generate_test!(weak_rc: Rc::downgrade(&Rc::new(VALUE)), rc::Weak<i32>, |x: &rc::Weak<i32>| x.as_ptr(), drop);
+        generate_test!(weak_arc: Arc::downgrade(&Arc::new(VALUE)), sync::Weak<i32>, |x: &sync::Weak<i32>| x.as_ptr(), drop);
     }
 }
