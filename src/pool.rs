@@ -1,8 +1,4 @@
-use core::{
-    fmt::Debug,
-    marker::PhantomData,
-    ops::{Add, AddAssign, Sub, SubAssign},
-};
+use core::{fmt::Debug, marker::PhantomData};
 
 use crate::{
     MPMCQueue,
@@ -102,36 +98,7 @@ impl OwnedIdx {
     }
 }
 
-impl Add<usize> for OwnedIdx {
-    type Output = Self;
-
-    fn add(mut self, rhs: usize) -> Self::Output {
-        self.idx += rhs;
-        self
-    }
-}
-
-impl AddAssign<usize> for OwnedIdx {
-    fn add_assign(&mut self, rhs: usize) {
-        self.idx += rhs
-    }
-}
-
-impl Sub<usize> for OwnedIdx {
-    type Output = Self;
-
-    fn sub(mut self, rhs: usize) -> Self::Output {
-        self.idx -= rhs;
-        self
-    }
-}
-
-impl SubAssign<usize> for OwnedIdx {
-    fn sub_assign(&mut self, rhs: usize) {
-        self.idx -= rhs
-    }
-}
-
+#[derive(Debug)]
 pub(crate) struct ItemHandle<T> {
     idx: OwnedIdx,
     _phantom: PhantomData<T>,
@@ -150,32 +117,6 @@ impl<T> ItemHandle<T> {
     }
 }
 
-impl<T> Debug for ItemHandle<T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("ItemHandlt")
-            .field("idx", &format_args!("{:?}", self.idx))
-            .finish()
-    }
-}
-
-impl<T> Sub<usize> for ItemHandle<T> {
-    type Output = Self;
-
-    fn sub(mut self, rhs: usize) -> Self::Output {
-        self.idx -= rhs;
-        self
-    }
-}
-
-impl<T> Add<usize> for ItemHandle<T> {
-    type Output = Self;
-
-    fn add(mut self, rhs: usize) -> Self::Output {
-        self.idx += rhs;
-        self
-    }
-}
-
 // SAFETY:
 // the caller must ensure that:
 // - the index stored in ItemHandle<T> uses at most 48 bits, if stored in a TaggedPtr64
@@ -188,12 +129,6 @@ unsafe impl<T> AsPackedValue for ItemHandle<T> {
 
     unsafe fn decode(raw: crate::core::TruncatedU64<Self>) -> Self {
         Self::new(OwnedIdx::new(raw.read() as usize))
-    }
-}
-
-impl<T> Default for ItemHandle<T> {
-    fn default() -> Self {
-        Self::new(OwnedIdx::new(usize::default()))
     }
 }
 
@@ -227,6 +162,7 @@ where
         let idx = self.pool.allocate(item)?;
         let handle = ItemHandle::new(idx);
         // this could fail if cap of pool > cap of queue
+        // In practice this will never happen, as the cap of the pool == the cap of the queue, if constructed via the public API
         self.q.push(handle).map_err(|handle| {
             self.pool
                 .deallocate(handle.idx)

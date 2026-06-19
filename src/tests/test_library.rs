@@ -127,6 +127,27 @@ where
     assert_eq!(q.len(), 0);
 }
 
+pub fn force_push<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = u32>,
+{
+    assert!(q.is_empty());
+
+    for i in 0..q.capacity() {
+        assert!(q.push(i as u32).is_ok());
+    }
+
+    assert!(q.is_full());
+
+    assert!(q.push(42).is_err());
+
+    for i in 0..q.capacity() {
+        assert!(q.force_push(42).is_some_and(|item| item == i as u32))
+    }
+
+    assert!(q.is_full())
+}
+
 pub(crate) fn spsc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,

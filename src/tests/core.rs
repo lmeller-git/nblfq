@@ -1,4 +1,5 @@
 use crate::tests::test_library::{
+    force_push,
     len,
     len_empty_full,
     linearizable,
@@ -76,11 +77,17 @@ cfg_atomic_tagged64! {
             linearizable(q);
         }
 
-        #[cfg(any(target_arch =  "x86_64", not(target_pointer_width = "64")))]
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64", not(target_pointer_width = "64")))]
         #[test]
         fn mpmc_ring_buf_ptr_impl() {
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
             mpmc_ring_buf_ptr(q);
+        }
+
+        #[test]
+        fn force_push_impl() {
+            let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
+            force_push(q);
         }
     }
 }
@@ -155,6 +162,13 @@ cfg_atomic_tagged128! {
             let q: QueueCore<BoxedBuffer<Tagged128<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
             mpmc_ring_buf_ptr(q);
         }
+
+        #[test]
+        fn force_push_impl() {
+            let q: QueueCore<BoxedBuffer<Tagged128<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
+            force_push(q);
+        }
+
     }
 }
 
@@ -165,19 +179,19 @@ mod pool {
 
     #[test]
     fn smoke_impl() {
-        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
         smoke(q);
     }
 
     #[test]
     fn smoke_long_impl() {
-        let q: PooledStaticQueue<_, 10> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 10> = PooledStaticQueue::default();
         smoke_long(q);
     }
 
     #[test]
     fn len_empty_full_impl() {
-        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
         len_empty_full(q);
     }
 
@@ -188,38 +202,44 @@ mod pool {
         #[cfg(not(miri))]
         const CAP: usize = 1000;
 
-        let q: PooledStaticQueue<_, CAP> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, CAP> = PooledStaticQueue::default();
         len(q);
     }
 
     #[test]
     fn spsc_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
         spsc(q);
     }
 
     #[test]
     fn mpsc_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
         mpsc(q);
     }
 
     #[test]
     fn mpmc_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
         mpmc(q);
     }
 
     #[test]
     fn mpmc_ring_buffer_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
         mpmc_ring_buffer(q);
     }
 
     #[test]
     fn linearizable_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::new();
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
         linearizable(q);
+    }
+
+    #[test]
+    fn force_push_impl() {
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        force_push(q);
     }
 }
 
@@ -229,20 +249,26 @@ mod array {
 
     #[test]
     fn smoke_impl() {
-        let q: StaticQueue<_, 2> = StaticQueue::new();
+        let q: StaticQueue<_, 2> = StaticQueue::default();
         smoke(q);
     }
 
     #[test]
     fn smoke_long_impl() {
-        let q: StaticQueue<_, 10> = StaticQueue::new();
+        let q: StaticQueue<_, 10> = StaticQueue::default();
         smoke_long(q);
     }
 
     #[test]
     fn len_empty_full_impl() {
-        let q: StaticQueue<_, 2> = StaticQueue::new();
+        let q: StaticQueue<_, 2> = StaticQueue::default();
         len_empty_full(q);
+    }
+
+    #[test]
+    fn force_push_impl() {
+        let q: StaticQueue<_, 2> = StaticQueue::default();
+        force_push(q);
     }
 }
 
@@ -269,6 +295,12 @@ mod owned {
         len_empty_full(q);
     }
 
+    #[test]
+    fn force_push_impl() {
+        let q: Queue<_> = Queue::new(2);
+        force_push(q);
+    }
+
     #[cfg(feature = "pool")]
     mod pool {
         use super::*;
@@ -290,6 +322,12 @@ mod owned {
         fn len_empty_full_impl() {
             let q: PooledQueue<_> = PooledQueue::new(2);
             len_empty_full(q);
+        }
+
+        #[test]
+        fn force_push_impl() {
+            let q: PooledQueue<_> = PooledQueue::new(2);
+            force_push(q);
         }
     }
 }
