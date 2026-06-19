@@ -77,11 +77,16 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 Multiple storage types are available, dependent on platform:
 
-- **TaggedPtr64** - platforms with native 64-bit atomic operations or feature `atomic-fallback`
+- **Tagged64** - platforms with native 64-bit atomic operations or feature `atomic-fallback`
 
-- **TaggedPtr128** - platforms with native 128-bit atomic operations or feature `atomic-fallback`
+- **Tagged128** - platforms with native 128-bit atomic operations or feature `atomic-fallback`
 
 Storage types will be chosen automatically, unless sepcified explicitly.
+
+> [!NOTE]
+> **ABA Safety & Storage Selection**
+> If it is plausible that other threads could perform `(2^15 - 1) * queue_size`
+> pop and push operations while a single thread is paused/preempted in pop/push, `Tagged128` slots should be used to ensure ABA safety.
 
 ## Feature Flags
 
