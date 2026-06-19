@@ -56,14 +56,6 @@ where
         self.value = S::put_count(self.value, count)
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn with_count<F>(&mut self, mut f: F)
-    where
-        F: FnMut(u64) -> u64,
-    {
-        self.put_count(f(self.get_count()));
-    }
-
     pub(crate) fn set_empty(&mut self) {
         let new = S::EMPTY_VALUE;
         self.value = S::put_count(new, S::extract_count(self.value));

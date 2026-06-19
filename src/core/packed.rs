@@ -1,4 +1,5 @@
 use core::{
+    fmt::Debug,
     marker::PhantomData,
     num::{NonZeroI8, NonZeroI16, NonZeroI32, NonZeroU8, NonZeroU16, NonZeroU32},
     ptr::NonNull,
@@ -14,6 +15,7 @@ use core::{
 /// - both `decode` and `encode` must be atomic and non-blocking
 /// - `decode` must only be called on a value returned by `encode`
 /// - the encoded value must be reconstructable fully from the lower `MIN_BIT_WIDTH` bits
+/// - `is_rt_safe` must return false (or panic/not compile), if it is not safe to encode the payload in `MIN_BIT_WIDTH` under the runtime environment.
 pub unsafe trait AsPackedValue: Sized {
     /// The minimal bit width from which this type may be reconstructed.
     const MIN_BIT_WIDTH: usize;
@@ -27,14 +29,11 @@ pub unsafe trait AsPackedValue: Sized {
     unsafe fn decode(raw: TruncatedU64<Self>) -> Self;
 
     /// Validates wether self is actually safe to pack into Self::MIN_BIT_WIDTH bits at runtime.
-    fn is_rt_safe() -> bool {
-        true
-    }
+    fn is_rt_safe() -> bool;
 }
 
 /// An U64, with the upper N bits set to 0.
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Eq)]
 pub struct TruncatedU64<T> {
     v: u64,
     _phantom: PhantomData<T>,
@@ -47,6 +46,22 @@ impl<T> Clone for TruncatedU64<T> {
 }
 
 impl<T> Copy for TruncatedU64<T> {}
+
+impl<T> Debug for TruncatedU64<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TruncatedU64")
+            .field("value", &self.v)
+            .finish()
+    }
+}
+
+impl<T> PartialEq for TruncatedU64<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.v.eq(&other.v)
+    }
+}
+
+impl<T> Eq for TruncatedU64<T> {}
 
 impl<T> TruncatedU64<T> {
     /// Returns the raw u64 stored in this type
@@ -84,6 +99,10 @@ macro_rules! atomic_encode_primitive {
             unsafe fn decode(raw: $crate::core::TruncatedU64<Self>) -> Self {
                 (raw.read()) as Self
             }
+
+            fn is_rt_safe() -> bool {
+                true
+            }
         }
     };
 }
@@ -102,6 +121,10 @@ macro_rules! atomic_encode_non_zero_primitive {
             unsafe fn decode(raw: $crate::core::TruncatedU64<Self>) -> Self {
                 Self::new(raw.read() as $raw)
                     .expect("trying to construct a NonZero from a zero value")
+            }
+
+            fn is_rt_safe() -> bool {
+                true
             }
         }
     };
@@ -133,6 +156,10 @@ unsafe impl AsPackedValue for () {
     // Safety:
     // nothing to do
     unsafe fn decode(_raw: TruncatedU64<Self>) -> Self {}
+
+    fn is_rt_safe() -> bool {
+        true
+    }
 }
 
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
@@ -432,6 +459,11 @@ mod full_bit64 {
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *const T
         }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
+        }
     }
 
     // Safety:
@@ -448,6 +480,11 @@ mod full_bit64 {
 
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *mut T
+        }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
         }
     }
 
@@ -467,6 +504,11 @@ mod full_bit64 {
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             Self::new(raw.read() as *mut T).expect("tried to recosntruct a NonNull from 0")
         }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
+        }
     }
 
     // Safety:
@@ -483,6 +525,11 @@ mod full_bit64 {
             // The caller must ensure that the value was returned by `encode` and the reference is still valid
             unsafe { &*(raw.read() as *const T) }
         }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
+        }
     }
 
     // Safety:
@@ -498,6 +545,11 @@ mod full_bit64 {
             // Safety:
             // The caller must ensure that this is called only once on a value returned by `encode` and the reference is still valid
             unsafe { &mut *(raw.read() as *mut T) }
+        }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
         }
     }
 
@@ -525,6 +577,11 @@ mod full_bit64 {
                 // The caller must ensure that this is called only once on a value returned by `encode` and the allocation is still valid
                 unsafe { Box::from_raw(raw.read() as *mut T) }
             }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
+            }
         }
 
         // Safety:
@@ -541,6 +598,11 @@ mod full_bit64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Rc::from_raw(raw.read() as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
             }
         }
 
@@ -559,6 +621,11 @@ mod full_bit64 {
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Arc::from_raw(raw.read() as *mut T) }
             }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
+            }
         }
 
         // Safety:
@@ -576,6 +643,11 @@ mod full_bit64 {
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { rc::Weak::from_raw(raw.read() as *mut T) }
             }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
+            }
         }
 
         // Safety:
@@ -592,6 +664,11 @@ mod full_bit64 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { sync::Weak::from_raw(raw.read() as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
             }
         }
     }
@@ -619,6 +696,11 @@ mod bit32 {
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *const T
         }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
+        }
     }
 
     // Safety:
@@ -635,6 +717,11 @@ mod bit32 {
 
         unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
             raw.read() as *mut T
+        }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
         }
     }
 
@@ -654,6 +741,11 @@ mod bit32 {
             Self::new(raw.read() as *mut T)
                 .expect("Constructing a NonNull form a null ptr wich was not obtained from encode")
         }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
+        }
     }
 
     // Safety:
@@ -670,6 +762,11 @@ mod bit32 {
             // The caller must ensure that this is called only on a value returned by `encode` and the reference is still valid
             unsafe { &*(raw.read() as *const T) }
         }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
+        }
     }
 
     // Safety:
@@ -685,6 +782,11 @@ mod bit32 {
             // Safety:
             // The caller must ensure that this is called only once on a value returned by `encode` and the reference is still valid
             unsafe { &mut *(raw.read() as *mut T) }
+        }
+
+        fn is_rt_safe() -> bool {
+            // it is always safe to encode self in size of self bytes
+            true
         }
     }
 
@@ -712,6 +814,11 @@ mod bit32 {
                 // The caller must ensure that this is called only once on a value returned by `encode` and the allocation is still valid
                 unsafe { Box::from_raw(raw.read() as *mut T) }
             }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
+            }
         }
 
         // Safety:
@@ -728,6 +835,11 @@ mod bit32 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Rc::from_raw(raw.read() as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
             }
         }
 
@@ -746,6 +858,11 @@ mod bit32 {
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { Arc::from_raw(raw.read() as *mut T) }
             }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
+            }
         }
 
         // Safety:
@@ -762,6 +879,11 @@ mod bit32 {
                 // Safety:
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { rc::Weak::from_raw(raw.read() as *mut T) }
+            }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
             }
         }
 
@@ -780,6 +902,11 @@ mod bit32 {
                 // The caller must ensure that this is called only once on a value created by `encode` and the underlying allocation is still valid
                 unsafe { sync::Weak::from_raw(raw.read() as *mut T) }
             }
+
+            fn is_rt_safe() -> bool {
+                // it is always safe to encode self in size of self bytes
+                true
+            }
         }
     }
 
@@ -790,6 +917,22 @@ mod bit32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truncated_trait_impls() {
+        struct NotClone;
+
+        let packed = TruncatedU64::<NotClone> {
+            v: 0,
+            _phantom: PhantomData,
+        };
+
+        #[allow(clippy::clone_on_copy)]
+        let cloned = packed.clone();
+
+        assert_eq!(packed, cloned);
+        assert_eq!(format!("{:?}", packed), format!("{:?}", cloned));
+    }
 
     macro_rules! generate_test {
         ($name:ident: $constructor:expr, $type:ty, $deref:expr, $drop:expr) => {

@@ -1,4 +1,5 @@
 use crate::tests::test_library::{
+    MaliciousCargo,
     force_push,
     len,
     len_empty_full,
@@ -89,6 +90,12 @@ cfg_atomic_tagged64! {
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
             force_push(q);
         }
+
+        #[test]
+        #[should_panic]
+        fn malicious_cargo_impl() {
+            let _q: QueueCore<BoxedBuffer<Tagged64<MaliciousCargo>>> = QueueCore::new_in(BoxedBuffer::new(4));
+        }
     }
 }
 
@@ -169,6 +176,11 @@ cfg_atomic_tagged128! {
             force_push(q);
         }
 
+        #[test]
+        #[should_panic]
+        fn malicious_cargo_impl() {
+            let _q: QueueCore<BoxedBuffer<Tagged128<MaliciousCargo>>> = QueueCore::new_in(BoxedBuffer::new(4));
+        }
     }
 }
 
@@ -327,6 +339,30 @@ mod owned {
         #[test]
         fn force_push_impl() {
             let q: PooledQueue<_> = PooledQueue::new(2);
+            force_push(q);
+        }
+
+        #[test]
+        fn smoke_mismatched_size_impl() {
+            let q: PooledQueue<_> = PooledQueue::new_with_arena_size(2, 3);
+            smoke(q);
+        }
+
+        #[test]
+        fn smoke_long_mismatched_size_impl() {
+            let q: PooledQueue<_> = PooledQueue::new_with_arena_size(10, 12);
+            smoke_long(q);
+        }
+
+        #[test]
+        fn len_empty_full_mismatched_size_impl() {
+            let q: PooledQueue<_> = PooledQueue::new_with_arena_size(2, 5);
+            len_empty_full(q);
+        }
+
+        #[test]
+        fn force_push_mismatched_size_impl() {
+            let q: PooledQueue<_> = PooledQueue::new_with_arena_size(2, 4);
             force_push(q);
         }
     }

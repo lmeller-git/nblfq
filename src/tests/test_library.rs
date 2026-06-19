@@ -6,7 +6,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::{thread::scope, vec::Vec};
 
-use crate::MPMCQueue;
+use crate::{MPMCQueue, core::AsPackedValue};
 
 pub(crate) fn smoke<Q>(q: Q)
 where
@@ -394,5 +394,33 @@ where
 
     for c in v {
         assert_eq!(c.load(Ordering::SeqCst), THREADS);
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MaliciousCargo(pub(crate) u128);
+
+// Safety:
+// This is not safe. Its intent is simply to check if queues allow using this clearly unsafe type.
+unsafe impl AsPackedValue for MaliciousCargo {
+    const MIN_BIT_WIDTH: usize = 48;
+
+    fn encode(zelf: Self) -> crate::core::TruncatedU64<Self> {
+        crate::core::TruncatedU64::new(zelf.0 as u64)
+    }
+
+    unsafe fn decode(raw: crate::core::TruncatedU64<Self>) -> Self {
+        Self(raw.read() as u128)
+    }
+
+    fn is_rt_safe() -> bool {
+        let zelf = Self(u128::MAX);
+
+        let encoded = Self::encode(zelf);
+        // Safety:
+        // this is safe, becasue we do not do any memory accesses with this value. It is simply some number.
+        let decoded = unsafe { Self::decode(encoded) };
+
+        decoded == zelf
     }
 }

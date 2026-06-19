@@ -110,6 +110,34 @@ mod pooled_queue {
                 ),
             }
         }
+
+        // TODO maybe export these publicly?
+
+        #[cfg(all(test, not(loom), not(shuttle)))]
+        #[allow(unused)]
+        /// Constructs a new `PooledQueue` with capacity `size`, arena size `arena_size` and slot type `Auto`
+        pub(crate) fn new_with_arena_size(size: usize, arena_size: usize) -> Self {
+            Self::with_slot_and_arena_size::<Auto>(size, arena_size)
+        }
+
+        #[cfg(all(test, not(loom), not(shuttle)))]
+        #[allow(unused)]
+        /// Constructs a new `PooledQueue` with capacity `size`, arena size `arena_size` and slot type `S`
+        pub(crate) fn with_slot_and_arena_size<S>(
+            size: usize,
+            arena_size: usize,
+        ) -> PooledQueue<T, S>
+        where
+            S: SlotType<ItemHandle<T>>,
+        {
+            PooledQueue {
+                inner: Pooled::new_from(
+                    Queue::with_slot(size),
+                    BoxedBuffer::new(arena_size),
+                    Queue::with_slot(arena_size),
+                ),
+            }
+        }
     }
 
     impl<T, S> MPMCQueue for PooledQueue<T, S>
