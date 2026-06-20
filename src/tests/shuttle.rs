@@ -1,4 +1,5 @@
 use crate::{
+    Growable,
     MPMCQueue,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -180,6 +181,92 @@ where
             });
         }
     })
+}
+
+pub(crate) fn mpsc_grow<Q>(q: Q)
+where
+    Q: Growable + MPMCQueue<Item = u32> + Sync,
+{
+    const COUNT: usize = 20;
+    const THREADS: usize = 4;
+    const GROW_STEP: usize = 10;
+
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    thread::scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    loop {
+                        if q.push(i as u32).is_ok() {
+                            break;
+                        }
+                        _ = q.grow_by(GROW_STEP);
+                    }
+                }
+            });
+        }
+
+        for _ in 0..THREADS {
+            for _ in 0..COUNT {
+                let n = loop {
+                    if let Some(x) = q.pop() {
+                        break x;
+                    }
+                };
+                v[n as usize].fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+
+    for c in v {
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
+    }
+}
+
+pub(crate) fn mpmc_grow<Q>(q: Q)
+where
+    Q: Growable + MPMCQueue<Item = u32> + Sync,
+{
+    const COUNT: usize = 30;
+    const RESIZERS: usize = 2;
+    const THREADS: usize = 2;
+
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    thread::scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    while q.push(i as u32).is_err() {}
+                }
+            });
+        }
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for _ in 0..COUNT {
+                    let n = loop {
+                        if let Some(x) = q.pop() {
+                            break x;
+                        }
+                    };
+                    v[n as usize].fetch_add(1, Ordering::SeqCst);
+                }
+            });
+        }
+        for _ in 0..RESIZERS {
+            scope.spawn(|| {
+                for _ in 0..3 {
+                    q.grow_by(2);
+                    crate::utils::Backoff::new().backoff();
+                }
+            });
+        }
+    });
+
+    for c in v {
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
+    }
 }
 
 cfg_atomic_tagged64! {
@@ -367,4 +454,97 @@ mod pool {
             100,
         );
     }
+}
+
+mod growable {
+    use super::*;
+    use crate::DynamicQueue;
+
+    #[test]
+    fn spsc_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                spsc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpmc_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                mpmc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpmc_ring_buffer_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                mpmc_ring_buffer(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpsc_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                mpsc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn linearizable_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(4);
+                linearizable(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpsc_grow_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(4);
+                mpsc_grow(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpmc_grow_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(4);
+                mpmc_grow(q);
+            },
+            100,
+        );
+    }
+
+    // #[test]
+    // fn replay() {
+    //     shuttle::replay(
+    //         || {
+    //             let q = DynamicQueue::new(4);
+    //             mpsc_grow(q)
+    //         },
+    //         "13817286080489804460",
+    //     );
+    // }
 }

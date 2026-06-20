@@ -15,6 +15,8 @@ pub(crate) mod utils;
 mod array;
 pub mod core;
 #[cfg(any(feature = "alloc", test))]
+mod growable;
+#[cfg(any(feature = "alloc", test))]
 mod owned;
 #[cfg(feature = "pool")]
 mod pool;
@@ -25,6 +27,8 @@ mod tests;
 #[cfg(feature = "pool")]
 pub use array::PooledStaticQueue;
 pub use array::StaticQueue;
+#[cfg(any(feature = "alloc", test))]
+pub use growable::DynamicQueue;
 #[cfg(all(any(feature = "alloc", test), feature = "pool"))]
 pub use owned::PooledQueue;
 #[cfg(any(feature = "alloc", test))]
@@ -171,4 +175,12 @@ pub trait MPMCQueue {
             }
         }
     }
+}
+
+/// An extension trait for MPMCQueues, which allows dynamic growth of the queue.
+pub trait Growable: MPMCQueue {
+    /// Grows the capacity of the queue by `by` slots. This method may block, if the backign allocator is blocking.
+    /// Only one concurrent `grow_by` may happen. A `grow_by` may not be conidered as finished until some time after the call to `grow_by` happened.
+    /// Returns false if `grow_by` failed.
+    fn grow_by(&self, by: usize) -> bool;
 }

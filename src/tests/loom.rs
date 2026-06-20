@@ -68,7 +68,6 @@ cfg_atomic_tagged128! {
             loom::model(|| {
                 let q = Queue::with_slot::<Tagged128>(2);
                 linearizable(q);
-                drop(q)
             });
         }
     }
@@ -85,5 +84,18 @@ mod pooled {
             let q = PooledQueue::new(2);
             linearizable(q);
         })
+    }
+}
+
+mod growable {
+    use super::*;
+    use crate::DynamicQueue;
+
+    #[test]
+    fn linearizable_impl() {
+        loom::model(|| {
+            let q = DynamicQueue::new(2);
+            linearizable(q);
+        });
     }
 }

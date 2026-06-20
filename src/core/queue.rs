@@ -45,16 +45,13 @@ where
         let mut backoff = Backoff::new();
         let mut head = self.head.load(Ordering::Acquire);
         loop {
+            let raw_buffer = self.buffer.inner();
             let components = loop {
-                let prev_idx = prev(head, self.buffer.capacity());
-                let current_item = self
-                    .buffer
-                    .inner()
+                let prev_idx = prev(head, raw_buffer.len());
+                let current_item = raw_buffer
                     .get(head)
                     .expect("QueueCore.head is out of bounds. This is a Bug.");
-                let prev_item = self
-                    .buffer
-                    .inner()
+                let prev_item = raw_buffer
                     .get(prev_idx)
                     .expect("QueueCore.head is out of bounds. This is a Bug.");
                 let prev_components = prev_item.components();
@@ -86,7 +83,7 @@ where
                         return Err(item);
                     }
                 }
-                head = (head + 1) % self.buffer.capacity();
+                head = (head + 1) % raw_buffer.len();
             };
 
             // at this point components is prev(current_component)
@@ -105,9 +102,7 @@ where
             expected.set_empty();
             expected.put_count(new_counter);
 
-            item = if let Err(Some(item)) = self
-                .buffer
-                .inner()
+            item = if let Err(Some(item)) = raw_buffer
                 .get(head)
                 .expect("QueueCore.head is out of bounds. This is a Bug.")
                 .cmpxchg(expected, Some(item), new_counter)
@@ -115,7 +110,7 @@ where
                 item
             } else {
                 self.head
-                    .store((head + 1) % self.buffer.capacity(), Ordering::Release);
+                    .store((head + 1) % raw_buffer.len(), Ordering::Release);
                 return Ok(());
             };
             backoff.backoff();

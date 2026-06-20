@@ -6,7 +6,7 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 use std::{thread::scope, vec::Vec};
 
-use crate::{MPMCQueue, core::AsPackedValue};
+use crate::{Growable, MPMCQueue, core::AsPackedValue};
 
 pub(crate) fn smoke<Q>(q: Q)
 where
@@ -422,5 +422,123 @@ unsafe impl AsPackedValue for MaliciousCargo {
         let decoded = unsafe { Self::decode(encoded) };
 
         decoded == zelf
+    }
+}
+
+pub(crate) fn smoke_grow<Q>(q: Q)
+where
+    Q: Growable + MPMCQueue<Item = u32>,
+{
+    let initial_cap = q.capacity();
+
+    for i in 0..initial_cap {
+        assert!(q.push(i as u32).is_ok());
+    }
+
+    assert!(q.is_full());
+    assert!(q.push(42).is_err());
+
+    assert!(q.grow_by(initial_cap));
+    assert_eq!(q.capacity(), initial_cap * 2);
+
+    for i in initial_cap..(initial_cap * 2) {
+        assert!(q.push(i as u32).is_ok());
+    }
+
+    for i in 0..(initial_cap * 2) {
+        assert_eq!(q.pop(), Some(i as u32));
+    }
+}
+
+pub(crate) fn mpsc_grow<Q>(q: Q)
+where
+    Q: Growable + MPMCQueue<Item = u32> + Sync,
+{
+    #[cfg(miri)]
+    const COUNT: usize = 100;
+    #[cfg(not(miri))]
+    const COUNT: usize = 10_000;
+    const THREADS: usize = 4;
+    const GROW_STEP: usize = 10;
+
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    loop {
+                        if q.push(i as u32).is_ok() {
+                            break;
+                        }
+                        _ = q.grow_by(GROW_STEP);
+                    }
+                }
+            });
+        }
+
+        for _ in 0..THREADS {
+            for _ in 0..COUNT {
+                let n = loop {
+                    if let Some(x) = q.pop() {
+                        break x;
+                    }
+                    crate::utils::Backoff::new().backoff();
+                };
+                v[n as usize].fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    });
+
+    for c in v {
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
+    }
+}
+
+pub(crate) fn mpmc_grow<Q>(q: Q)
+where
+    Q: Growable + MPMCQueue<Item = u32> + Sync,
+{
+    #[cfg(miri)]
+    const COUNT: usize = 50;
+    #[cfg(not(miri))]
+    const COUNT: usize = 75_000;
+    const RESIZERS: usize = 2;
+    const THREADS: usize = 4;
+
+    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+    scope(|scope| {
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    while q.push(i as u32).is_err() {}
+                }
+            });
+        }
+        for _ in 0..THREADS {
+            scope.spawn(|| {
+                for _ in 0..COUNT {
+                    let n = loop {
+                        if let Some(x) = q.pop() {
+                            break x;
+                        }
+                    };
+                    v[n as usize].fetch_add(1, Ordering::SeqCst);
+                }
+            });
+        }
+        for _ in 0..RESIZERS {
+            scope.spawn(|| {
+                for _ in 0..100 {
+                    q.grow_by(10);
+                    crate::utils::Backoff::new().backoff();
+                }
+            });
+        }
+    });
+
+    for c in v {
+        assert_eq!(c.load(Ordering::SeqCst), THREADS);
     }
 }
