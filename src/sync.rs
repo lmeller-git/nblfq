@@ -69,7 +69,6 @@ mod core_ {
             }
         }
     }
-    #[cfg(not(feature = "std"))]
     pub use core::hint;
     #[cfg(feature = "std")]
     pub use std::thread;
