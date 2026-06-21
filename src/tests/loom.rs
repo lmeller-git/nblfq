@@ -99,4 +99,18 @@ mod growable {
             linearizable(q);
         });
     }
+
+    #[cfg(feature = "pool")]
+    mod pool {
+        use super::*;
+        use crate::PooledDynamicQueue;
+
+        #[test]
+        fn linearizable_impl() {
+            loom::model(|| {
+                let q = PooledDynamicQueue::new(2);
+                linearizable(q);
+            });
+        }
+    }
 }

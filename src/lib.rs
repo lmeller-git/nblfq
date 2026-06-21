@@ -14,7 +14,7 @@ extern crate std;
 pub(crate) mod utils;
 mod array;
 pub mod core;
-#[cfg(any(feature = "dynamic", test))]
+#[cfg(feature = "dynamic")]
 mod growable;
 #[cfg(any(feature = "alloc", test))]
 mod owned;
@@ -27,9 +27,11 @@ mod tests;
 #[cfg(feature = "pool")]
 pub use array::PooledStaticQueue;
 pub use array::StaticQueue;
-#[cfg(any(feature = "dynamic", test))]
+#[cfg(feature = "dynamic")]
 pub use growable::DynamicQueue;
-#[cfg(all(any(feature = "alloc", test), feature = "pool"))]
+#[cfg(all(feature = "dynamic", feature = "pool"))]
+pub use growable::PooledDynamicQueue;
+#[cfg(all(feature = "alloc", feature = "pool"))]
 pub use owned::PooledQueue;
 #[cfg(any(feature = "alloc", test))]
 pub use owned::Queue;

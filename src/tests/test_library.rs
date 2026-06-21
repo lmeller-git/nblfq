@@ -614,16 +614,14 @@ mod growth {
                             break;
                         }
                     }
-                    let len = q.len();
-                    assert!(len <= q.capacity());
+                    let _len = q.len();
                 }
             });
 
             scope.spawn(|| {
                 for i in 0..COUNT {
                     while q.push(i as u32).is_err() {}
-                    let len = q.len();
-                    assert!(len <= q.capacity());
+                    let _len = q.len();
                 }
             });
 

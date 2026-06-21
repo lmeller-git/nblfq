@@ -1,4 +1,5 @@
-use core::ptr::null_mut;
+use alloc::boxed::Box;
+use core::{marker::PhantomData, ptr::null_mut};
 
 use crate::{
     Growable,
@@ -8,29 +9,28 @@ use crate::{
         queue::QueueCore,
         slots::{Auto, SlotType},
     },
+    growable::NewSized,
     owned::buffer::BoxedBuffer,
     sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering},
     utils::Backoff,
 };
 
 /// A lock-free non blocking queue, that may dynamically grow.
-pub struct DynamicQueue<T, S = Auto>
-where
-    T: AsPackedValue,
-    S: SlotType<T>,
-{
-    cores: [AtomicPtr<QueueCore<BoxedBuffer<S::Slot>>>; 2],
+pub(crate) struct GrowableQueueCore<T, Q, S = Auto> {
+    cores: [AtomicPtr<Q>; 2],
     active_pushes: [AtomicUsize; 2],
     active_reads: [AtomicUsize; 2],
     push_epoch: AtomicUsize,
     pop_epoch: AtomicUsize,
     is_resizing: AtomicBool,
+    _slot: PhantomData<(S, T)>,
 }
 
-impl<T> DynamicQueue<T, Auto>
+impl<T, Q> GrowableQueueCore<T, Q, Auto>
 where
-    T: AsPackedValue,
+    Q: NewSized,
 {
+    #[allow(dead_code)]
     /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
     /// `T` must fit into the chosen slot type
     pub fn new(size: usize) -> Self {
@@ -39,33 +39,23 @@ where
 
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
-    pub fn with_slot<S>(size: usize) -> DynamicQueue<T, S>
-    where
-        S: SlotType<T>,
-    {
-        DynamicQueue {
+    pub fn with_slot<S>(size: usize) -> GrowableQueueCore<T, Q, S> {
+        GrowableQueueCore {
             cores: [
-                AtomicPtr::new(Box::into_raw(Box::new(QueueCore::new_in(
-                    BoxedBuffer::new(size),
-                )))),
-                AtomicPtr::new(Box::into_raw(Box::new(QueueCore::new_in(
-                    BoxedBuffer::new(1),
-                )))),
+                AtomicPtr::new(Box::into_raw(Box::new(Q::with_size(size)))),
+                AtomicPtr::new(Box::into_raw(Box::new(Q::with_size(1)))),
             ],
             active_pushes: [AtomicUsize::new(0), AtomicUsize::new(0)],
             active_reads: [AtomicUsize::new(0), AtomicUsize::new(0)],
             push_epoch: AtomicUsize::new(0),
             pop_epoch: AtomicUsize::new(0),
             is_resizing: AtomicBool::new(false),
+            _slot: PhantomData,
         }
     }
 }
 
-impl<T, S> Drop for DynamicQueue<T, S>
-where
-    T: AsPackedValue,
-    S: SlotType<T>,
-{
+impl<T, Q, S> Drop for GrowableQueueCore<T, Q, S> {
     fn drop(&mut self) {
         let left = self.cores[0].swap(null_mut(), Ordering::SeqCst);
         // Safety:
@@ -73,18 +63,18 @@ where
         // This queue was allocated in `new` or in `grow_by` with `Box::into_raw` and was not deallocated since then.
         _ = unsafe { Box::from_raw(left) };
 
-        let rigth = self.cores[1].swap(null_mut(), Ordering::SeqCst);
+        let right = self.cores[1].swap(null_mut(), Ordering::SeqCst);
         // Safety:
         // No concurrent drops of this ds can happen.
         // This queue was allocated in `new` or in `grow_by` with `Box::into_raw` and was not deallocated since then.
-        _ = unsafe { Box::from_raw(rigth) };
+        _ = unsafe { Box::from_raw(right) };
     }
 }
 
-impl<T, S> Growable for DynamicQueue<T, S>
+impl<T, Q, S> Growable for GrowableQueueCore<T, Q, S>
 where
     T: AsPackedValue,
-    S: SlotType<T>,
+    Q: NewSized + MPMCQueue<Item = T>,
 {
     fn grow_by(&self, by: usize) -> bool {
         let pop_epoch = self.pop_epoch.load(Ordering::SeqCst);
@@ -126,9 +116,7 @@ where
             0
         );
 
-        let new_queue = Box::into_raw(Box::new(QueueCore::new_in(BoxedBuffer::new(
-            self.capacity() + by,
-        ))));
+        let new_queue = Box::into_raw(Box::new(Q::with_size(self.capacity() + by)));
 
         // Safety:
         // since pop_epoch == push_epoch all concurrent threads acces the queue at push_epoch % 2.
@@ -147,12 +135,11 @@ where
     }
 }
 
-impl<T, S> DynamicQueue<T, S>
+impl<T, Q, S> GrowableQueueCore<T, Q, S>
 where
     T: AsPackedValue,
-    S: SlotType<T>,
 {
-    fn get_queue(&self, epoch: usize) -> &QueueCore<BoxedBuffer<S::Slot>> {
+    fn get_queue(&self, epoch: usize) -> &Q {
         let queue = self.cores[epoch % 2].load(Ordering::SeqCst);
         // Safety:
         // It is guranteed by `grow_by` that no concurrent mutable access can happen to any queue in cores.
@@ -179,10 +166,10 @@ where
     }
 }
 
-impl<T, S> MPMCQueue for DynamicQueue<T, S>
+impl<T, Q, S> MPMCQueue for GrowableQueueCore<T, Q, S>
 where
     T: AsPackedValue,
-    S: SlotType<T>,
+    Q: MPMCQueue<Item = T>,
 {
     type Item = T;
 
@@ -340,5 +327,96 @@ where
 
             return is_full;
         }
+    }
+}
+
+impl<T, Q, S> NewSized for GrowableQueueCore<T, Q, S>
+where
+    Q: NewSized,
+{
+    fn with_size(size: usize) -> GrowableQueueCore<T, Q, S> {
+        GrowableQueueCore::with_slot(size)
+    }
+}
+
+impl<S> NewSized for QueueCore<BoxedBuffer<S>>
+where
+    S: Default,
+{
+    fn with_size(size: usize) -> Self {
+        Self::new_in(BoxedBuffer::new(size))
+    }
+}
+
+/// A lock-free non blocking queue, that may dynamically grow.
+pub struct DynamicQueue<T, S = Auto>
+where
+    S: SlotType<T>,
+    T: AsPackedValue,
+{
+    inner: GrowableQueueCore<T, QueueCore<BoxedBuffer<S::Slot>>, S>,
+}
+
+impl<T> DynamicQueue<T, Auto>
+where
+    T: AsPackedValue,
+{
+    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
+    /// `T` must fit into the chosen slot type
+    pub fn new(size: usize) -> Self {
+        Self::with_slot::<Auto>(size)
+    }
+
+    /// Constructs a new `Queue` with capacity `size` and slot type `S`.
+    /// `T` must fit into the slot type `S`
+    pub fn with_slot<S>(size: usize) -> DynamicQueue<T, S>
+    where
+        S: SlotType<T>,
+    {
+        DynamicQueue {
+            inner: GrowableQueueCore::with_slot::<S>(size),
+        }
+    }
+}
+
+impl<T, S> MPMCQueue for DynamicQueue<T, S>
+where
+    T: AsPackedValue,
+    S: SlotType<T>,
+{
+    type Item = T;
+
+    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+        self.inner.push(item)
+    }
+
+    fn pop(&self) -> Option<Self::Item> {
+        self.inner.pop()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn is_full(&self) -> bool {
+        self.inner.is_full()
+    }
+}
+
+impl<T, S> Growable for DynamicQueue<T, S>
+where
+    T: AsPackedValue,
+    S: SlotType<T>,
+{
+    fn grow_by(&self, by: usize) -> bool {
+        self.inner.grow_by(by)
     }
 }

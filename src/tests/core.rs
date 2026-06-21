@@ -485,4 +485,62 @@ mod growable {
         let q = DynamicQueue::new(CAP);
         len_grow(q);
     }
+
+    #[cfg(feature = "pool")]
+    mod pool {
+        use super::*;
+        use crate::PooledDynamicQueue;
+
+        #[test]
+        fn smoke_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            smoke(q);
+        }
+
+        #[test]
+        fn smoke_long_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(10);
+            smoke_long(q);
+        }
+
+        #[test]
+        fn len_empty_full_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            len_empty_full(q);
+        }
+
+        #[test]
+        fn force_push_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            force_push(q);
+        }
+
+        #[test]
+        fn smoke_grow_impl() {
+            let q = PooledDynamicQueue::new(4);
+            smoke_grow(q);
+        }
+
+        #[test]
+        fn mpsc_grow_impl() {
+            let q = PooledDynamicQueue::new(4);
+            mpsc_grow(q);
+        }
+
+        #[test]
+        fn mpmc_grow_impl() {
+            let q = PooledDynamicQueue::new(4);
+            mpmc_grow(q);
+        }
+
+        #[test]
+        fn len_grow_impl() {
+            #[cfg(miri)]
+            const CAP: usize = 40;
+            #[cfg(not(miri))]
+            const CAP: usize = 1000;
+            let q = PooledDynamicQueue::new(CAP);
+            len_grow(q);
+        }
+    }
 }

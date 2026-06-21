@@ -1,4 +1,4 @@
-#[cfg(feature = "pool")]
+#[cfg(all(feature = "pool", feature = "alloc"))]
 pub use pooled_queue::*;
 
 use crate::{
@@ -72,7 +72,7 @@ where
     }
 }
 
-#[cfg(feature = "pool")]
+#[cfg(all(feature = "pool", feature = "alloc"))]
 mod pooled_queue {
     use super::*;
     use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};

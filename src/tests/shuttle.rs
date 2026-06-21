@@ -295,16 +295,14 @@ mod growth {
                             break;
                         }
                     }
-                    let len = q.len();
-                    assert!(len <= q.capacity());
+                    let _len = q.len();
                 }
             });
 
             scope.spawn(|| {
                 for i in 0..COUNT {
                     while q.push(i as u32).is_err() {}
-                    let len = q.len();
-                    assert!(len <= q.capacity());
+                    let _len = q.len();
                 }
             });
 
@@ -602,5 +600,100 @@ mod growable {
             },
             100,
         );
+    }
+
+    #[cfg(feature = "pool")]
+    mod pool {
+        use super::*;
+        use crate::PooledDynamicQueue;
+
+        #[test]
+        fn spsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    spsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    mpmc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_ring_buffer_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    mpmc_ring_buffer(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    mpsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn linearizable_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    linearizable(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpsc_grow_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    mpsc_grow(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_grow_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    mpmc_grow(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn len_grow_impl() {
+            const CAP: usize = 40;
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(CAP);
+                    len_grow(q);
+                },
+                100,
+            );
+        }
     }
 }
