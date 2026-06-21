@@ -9,8 +9,12 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use crossbeam_::*;
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
 use crossbeam_queue::ArrayQueue;
+#[cfg(all(bench_crossbeam, feature = "dynamic"))]
+use crossbeam_queue::SegQueue;
 #[cfg(feature = "dynamic")]
 use nblf_queue::DynamicQueue;
+#[cfg(feature = "dynamic")]
+use nblf_queue::Growable;
 #[cfg(all(feature = "dynamic", feature = "pool"))]
 use nblf_queue::PooledDynamicQueue;
 #[cfg(all(feature = "alloc", feature = "pool"))]
@@ -50,6 +54,57 @@ mod crossbeam_ {
 
         fn capacity(&self) -> usize {
             self.0.capacity()
+        }
+    }
+
+    #[cfg(feature = "dynamic")]
+    pub use dynamic::*;
+
+    #[cfg(feature = "dynamic")]
+    mod dynamic {
+        use super::*;
+
+        pub struct SegQueueWrapper<T>(SegQueue<T>);
+
+        impl<T> SegQueueWrapper<T> {
+            pub fn new() -> Self {
+                Self(SegQueue::new())
+            }
+        }
+
+        impl<T> MPMCQueue for SegQueueWrapper<T> {
+            type Item = T;
+
+            fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+                self.0.push(item);
+                Ok(())
+            }
+
+            fn pop(&self) -> Option<Self::Item> {
+                self.0.pop()
+            }
+
+            fn capacity(&self) -> usize {
+                usize::MAX
+            }
+
+            fn len(&self) -> usize {
+                self.0.len()
+            }
+
+            fn is_empty(&self) -> bool {
+                self.0.is_empty()
+            }
+
+            fn is_full(&self) -> bool {
+                false
+            }
+        }
+
+        impl<T> Growable for SegQueueWrapper<T> {
+            fn grow_by(&self, _by: usize) -> bool {
+                true
+            }
         }
     }
 }
@@ -150,6 +205,82 @@ where
             }
         });
     });
+}
+
+#[cfg(feature = "dynamic")]
+use dynamic::*;
+
+#[cfg(feature = "dynamic")]
+mod dynamic {
+
+    use super::*;
+
+    pub fn run_queue_mpsc_growing<Q>(q: Q, grow_step: usize)
+    where
+        Q: MPMCQueue<Item = &'static usize> + Sync + Growable,
+    {
+        assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
+
+        thread::scope(|scope| {
+            for _ in 0..N_PRODUCER {
+                scope.spawn(|| {
+                    for _ in 0..ITER_PER_THREAD {
+                        while q.push(black_box(&1)).is_err() {
+                            _ = q.grow_by(grow_step);
+                            spin_loop();
+                        }
+                    }
+                });
+            }
+
+            for _ in 0..TOTAL_ITEMS {
+                loop {
+                    if let Some(item) = q.pop() {
+                        black_box(item);
+                        break;
+                    }
+                    spin_loop();
+                }
+            }
+        })
+    }
+
+    pub fn run_queue_mpmc_growing<Q>(q: Q, grow_step: usize)
+    where
+        Q: MPMCQueue<Item = &'static usize> + Growable + Sync,
+    {
+        assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
+
+        let is_done = AtomicU64::new(TOTAL_ITEMS);
+
+        thread::scope(|scope| {
+            for _ in 0..N_PRODUCER {
+                scope.spawn(|| {
+                    for _ in 0..ITER_PER_THREAD {
+                        while q.push(black_box(&1)).is_err() {
+                            _ = q.grow_by(grow_step);
+                            spin_loop();
+                        }
+                    }
+                });
+            }
+
+            for _ in 0..N_PRODUCER {
+                scope.spawn(|| {
+                    loop {
+                        if is_done.load(Ordering::Acquire) == 0 {
+                            break;
+                        }
+                        if let Some(item) = q.pop() {
+                            black_box(item);
+                            is_done.fetch_sub(1, Ordering::Release);
+                        }
+                        spin_loop();
+                    }
+                });
+            }
+        });
+    }
 }
 
 fn bench_throughput_spsc(c: &mut Criterion) {
@@ -323,8 +454,63 @@ fn bench_push_pop(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "dynamic")]
+fn bench_throughput_mpmc_growing(c: &mut Criterion) {
+    let mut group = c.benchmark_group("growing mpmc with differing growth steps");
+
+    for step in [32, 64, 256, 512] {
+        group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
+
+        group.bench_function(format!("DynamicQueue | step={step}"), |b| {
+            b.iter(|| run_queue_mpmc_growing(DynamicQueue::new(2), step))
+        });
+
+        #[cfg(feature = "pool")]
+        group.bench_function(format!("PooledDynamicQueue | step={step}"), |b| {
+            b.iter(|| run_queue_mpmc_growing(PooledDynamicQueue::new(2), step))
+        });
+
+        #[cfg(bench_crossbeam)]
+        group.bench_function(format!("crossbeam::SegQueue | step={step}"), |b| {
+            b.iter(|| run_queue_mpmc_growing(SegQueueWrapper::new(), step))
+        });
+    }
+    group.finish();
+}
+
+#[cfg(feature = "dynamic")]
+fn bench_throughput_mpsc_growing(c: &mut Criterion) {
+    let mut group = c.benchmark_group("growing mpsc with differing growth steps");
+
+    for step in [32, 64, 256, 512] {
+        group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
+
+        group.bench_function(format!("DynamicQueue | step={step}"), |b| {
+            b.iter(|| run_queue_mpsc_growing(DynamicQueue::new(2), step))
+        });
+
+        #[cfg(feature = "pool")]
+        group.bench_function(format!("PooledDynamicQueue | step={step}"), |b| {
+            b.iter(|| run_queue_mpsc_growing(PooledDynamicQueue::new(2), step))
+        });
+
+        #[cfg(bench_crossbeam)]
+        group.bench_function(format!("crossbeam::SegQueue | step={step}"), |b| {
+            b.iter(|| run_queue_mpsc_growing(SegQueueWrapper::new(), step))
+        });
+    }
+    group.finish();
+}
+
 #[cfg(feature = "alloc")]
 criterion_group!(benches_alloc, bench_throughput_mpmc_cap);
+
+#[cfg(feature = "dynamic")]
+criterion_group!(
+    benches_growth,
+    bench_throughput_mpsc_growing,
+    bench_throughput_mpmc_growing
+);
 
 criterion_group!(
     benches_base,
@@ -337,5 +523,8 @@ criterion_group!(
 #[cfg(not(feature = "alloc"))]
 criterion_main!(benches_base);
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "dynamic")))]
 criterion_main!(benches_base, benches_alloc);
+
+#[cfg(feature = "dynamic")]
+criterion_main!(benches_base, benches_alloc, benches_growth);
