@@ -152,8 +152,8 @@ where
     fn register_reader(&self, target_epoch: usize) -> bool {
         self.active_reads[target_epoch % 2].fetch_add(1, Ordering::Release);
 
-        let current_push = self.push_epoch.load(Ordering::Acquire);
-        let current_pop = self.pop_epoch.load(Ordering::Acquire);
+        let current_push = self.push_epoch.load(Ordering::SeqCst);
+        let current_pop = self.pop_epoch.load(Ordering::SeqCst);
 
         // It is safe to read if the target epoch is still structurally active
         if target_epoch != current_push && target_epoch != current_pop {

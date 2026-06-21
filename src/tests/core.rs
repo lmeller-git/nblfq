@@ -373,7 +373,14 @@ mod growable {
     use super::*;
     use crate::{
         DynamicQueue,
-        tests::test_library::{len_grow, mpmc_grow, mpsc_grow, smoke_grow},
+        tests::test_library::{
+            grow_storm,
+            len_grow,
+            mpmc_grow,
+            mpsc_grow,
+            oscillation_grow,
+            smoke_grow,
+        },
     };
 
     #[test]
@@ -486,6 +493,18 @@ mod growable {
         len_grow(q);
     }
 
+    #[test]
+    fn grow_storm_impl() {
+        let q = DynamicQueue::new(2);
+        grow_storm(q);
+    }
+
+    #[test]
+    fn oscillation_grow_impl() {
+        let q = DynamicQueue::new(2);
+        oscillation_grow(q);
+    }
+
     #[cfg(feature = "pool")]
     mod pool {
         use super::*;
@@ -541,6 +560,18 @@ mod growable {
             const CAP: usize = 1000;
             let q = PooledDynamicQueue::new(CAP);
             len_grow(q);
+        }
+
+        #[test]
+        fn grow_storm_impl() {
+            let q = PooledDynamicQueue::new(2);
+            grow_storm(q);
+        }
+
+        #[test]
+        fn oscillation_grow_impl() {
+            let q = PooledDynamicQueue::new(2);
+            oscillation_grow(q);
         }
     }
 }

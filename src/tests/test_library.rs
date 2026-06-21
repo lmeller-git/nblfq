@@ -3,10 +3,13 @@
 //! Tests adapted from crossbeam-queue's test suite.
 //! https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue
 
-use core::sync::atomic::{AtomicUsize, Ordering};
 use std::{thread::scope, vec::Vec};
 
-use crate::{MPMCQueue, core::AsPackedValue};
+use crate::{
+    MPMCQueue,
+    core::AsPackedValue,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 pub(crate) fn smoke<Q>(q: Q)
 where
@@ -433,6 +436,8 @@ pub(crate) use growth::*;
 
 #[cfg(feature = "dynamic")]
 mod growth {
+    use std::{sync::Arc, thread};
+
     use super::*;
     use crate::Growable;
 
@@ -490,6 +495,7 @@ mod growth {
                                 break;
                             }
                             _ = q.grow_by(GROW_STEP);
+                            crate::utils::Backoff::new().backoff();
                         }
                     }
                 });
@@ -530,10 +536,14 @@ mod growth {
             for _ in 0..THREADS {
                 scope.spawn(|| {
                     for i in 0..COUNT {
-                        while q.push(i as u32).is_err() {}
+                        while q.push(i as u32).is_err() {
+                            _ = q.grow_by(10);
+                            crate::utils::Backoff::new().backoff();
+                        }
                     }
                 });
             }
+
             for _ in 0..THREADS {
                 scope.spawn(|| {
                     for _ in 0..COUNT {
@@ -546,11 +556,13 @@ mod growth {
                     }
                 });
             }
+
             for _ in 0..RESIZERS {
                 scope.spawn(|| {
+                    let mut backoff = crate::utils::Backoff::new();
                     for _ in 0..100 {
                         q.grow_by(10);
-                        crate::utils::Backoff::new().backoff();
+                        backoff.backoff();
                     }
                 });
             }
@@ -559,6 +571,119 @@ mod growth {
         for c in v {
             assert_eq!(c.load(Ordering::SeqCst), THREADS);
         }
+    }
+
+    pub(crate) fn grow_storm<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        #[cfg(miri)]
+        const THREADS: usize = 4;
+        #[cfg(not(miri))]
+        const THREADS: usize = 8;
+        #[cfg(miri)]
+        const ITERS: usize = 20;
+        #[cfg(not(miri))]
+        const ITERS: usize = 3000;
+
+        let tracking_vector = (0..ITERS).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        scope(|scope| {
+            for t in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..ITERS {
+                        let mut backoff = crate::utils::Backoff::new();
+
+                        loop {
+                            if i.is_multiple_of(5) {
+                                let _ = q.grow_by(2);
+                            }
+
+                            if q.push(i as u32).is_ok() {
+                                break;
+                            }
+                            backoff.backoff();
+                        }
+                    }
+                });
+
+                for _ in 0..ITERS {
+                    let mut backoff = crate::utils::Backoff::new();
+                    let item = loop {
+                        if t.is_multiple_of(3) {
+                            let _ = q.grow_by(1);
+                        }
+                        if let Some(x) = q.pop() {
+                            break x;
+                        }
+                        backoff.backoff();
+                    };
+                    tracking_vector[item as usize].fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        });
+
+        for count in tracking_vector.into_iter() {
+            assert_eq!(count.load(Ordering::SeqCst), THREADS);
+        }
+    }
+
+    pub(crate) fn oscillation_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        #[cfg(not(miri))]
+        const ITER: usize = 100;
+        #[cfg(miri)]
+        const ITER: usize = 10;
+
+        let total_popped = Arc::new(AtomicUsize::new(0));
+        let total_pushed = Arc::new(AtomicUsize::new(0));
+
+        scope(|scope| {
+            scope.spawn(|| {
+                for _ in 0..10 {
+                    let mut backoff = crate::utils::Backoff::new();
+                    for _ in 0..100 {
+                        if q.grow_by(10) {
+                            break;
+                        }
+                        backoff.backoff();
+                    }
+                    thread::yield_now();
+                }
+            });
+
+            scope.spawn(|| {
+                let mut backoff = crate::utils::Backoff::new();
+                for _ in 1..ITER {
+                    let mut pushes = 0;
+                    let mut backoff_inner = crate::utils::Backoff::new();
+
+                    let cap = q.capacity();
+
+                    while pushes < cap {
+                        if q.push(42).is_ok() {
+                            pushes = total_pushed.fetch_add(1, Ordering::SeqCst) + 1;
+                        }
+                        backoff_inner.backoff();
+                    }
+
+                    backoff.backoff();
+
+                    while q.pop().is_some() {
+                        total_popped.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+            });
+        });
+
+        assert!(q.is_empty());
+        assert_eq!(q.len(), 0);
+        assert_eq!(
+            total_popped.load(Ordering::SeqCst),
+            total_pushed.load(Ordering::SeqCst)
+        );
     }
 
     pub(crate) fn len_grow<Q>(q: Q)
