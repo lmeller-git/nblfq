@@ -57,17 +57,18 @@ pub mod slots {
     }
 
     impl<T: AsPackedValue> SlotType<T> for Auto {
-        #[cfg(all(
-            any(target_has_atomic = "64", feature = "atomic-fallback"),
-            not(any(target_has_atomic = "128", feature = "atomic-fallback"))
-        ))]
+        #[cfg(all(not(target_has_atomic = "128"), target_has_atomic = "64"))]
         type Slot = slot::Tagged64<T>;
-        #[cfg(any(target_has_atomic = "128", feature = "atomic-fallback"))]
+        #[cfg(any(
+            target_has_atomic = "128",
+            all(not(target_has_atomic = "64"), feature = "atomic-fallback")
+        ))]
         type Slot = slot::Tagged128<T>;
 
         #[cfg(all(
-            not(any(target_has_atomic = "64", feature = "atomic-fallback")),
-            not(target_has_atomic = "128")
+            not(target_has_atomic = "128"),
+            not(target_has_atomic = "64"),
+            not(feature = "atomic-fallback")
         ))]
         compile_error!("target arch is currently not supported");
     }

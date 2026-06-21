@@ -19,7 +19,7 @@ To bench `crossbeam_queue::ArrayQueue`, `RUSTFLAGS=--cfg bench_crossbeam` and fe
 To run all benchmarks:
 
 ```bash
-RUSTFLAGS="--cfg bench_crossbeam" cargo bench --features alloc
+RUSTFLAGS="--cfg bench_crossbeam" cargo bench --all-features
 ```
 
 ## Results
