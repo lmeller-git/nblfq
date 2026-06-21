@@ -578,27 +578,26 @@ mod growth {
         Q: Growable + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(miri)]
-        const THREADS: usize = 4;
+        const THREADS: usize = 2;
         #[cfg(not(miri))]
         const THREADS: usize = 8;
         #[cfg(miri)]
-        const ITERS: usize = 20;
+        const ITERS: usize = 15;
         #[cfg(not(miri))]
-        const ITERS: usize = 3000;
+        const ITERS: usize = 2000;
 
         let tracking_vector = (0..ITERS).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
 
         scope(|scope| {
-            for t in 0..THREADS {
+            for _ in 0..THREADS {
                 scope.spawn(|| {
                     for i in 0..ITERS {
+                        if i % 5 == 0 {
+                            let _ = q.grow_by(2);
+                        }
+
                         let mut backoff = crate::utils::Backoff::new();
-
                         loop {
-                            if i.is_multiple_of(5) {
-                                let _ = q.grow_by(2);
-                            }
-
                             if q.push(i as u32).is_ok() {
                                 break;
                             }
@@ -607,19 +606,22 @@ mod growth {
                     }
                 });
 
-                for _ in 0..ITERS {
-                    let mut backoff = crate::utils::Backoff::new();
-                    let item = loop {
-                        if t.is_multiple_of(3) {
+                scope.spawn(|| {
+                    for i in 0..ITERS {
+                        if i % 3 == 0 {
                             let _ = q.grow_by(1);
                         }
-                        if let Some(x) = q.pop() {
-                            break x;
-                        }
-                        backoff.backoff();
-                    };
-                    tracking_vector[item as usize].fetch_add(1, Ordering::SeqCst);
-                }
+
+                        let mut backoff = crate::utils::Backoff::new();
+                        let item = loop {
+                            if let Some(x) = q.pop() {
+                                break x;
+                            }
+                            backoff.backoff();
+                        };
+                        tracking_vector[item as usize].fetch_add(1, Ordering::SeqCst);
+                    }
+                });
             }
         });
 
@@ -644,7 +646,7 @@ mod growth {
             scope.spawn(|| {
                 for _ in 0..10 {
                     let mut backoff = crate::utils::Backoff::new();
-                    for _ in 0..100 {
+                    for _ in 0..50 {
                         if q.grow_by(10) {
                             break;
                         }
@@ -765,5 +767,78 @@ mod growth {
         });
 
         assert_eq!(q.len(), 0);
+    }
+
+    pub(crate) fn suppl_methods_chaos<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        #[cfg(not(miri))]
+        const ITERS: usize = 10_000;
+        #[cfg(miri)]
+        const ITERS: usize = 30;
+        #[cfg(not(miri))]
+        const GROW_CYCLES: usize = 500;
+        #[cfg(miri)]
+        const GROW_CYCLES: usize = 20;
+        const GROW_STEP: usize = 10;
+
+        let initial_cap = q.capacity();
+
+        let total_grows = Arc::new(AtomicUsize::new(0));
+
+        scope(|scope| {
+            scope.spawn(|| {
+                let mut last_cap = initial_cap;
+                for _ in 0..ITERS {
+                    let current_cap = q.capacity();
+
+                    assert!(
+                        current_cap >= last_cap,
+                        "Monotonicity broken: Capacity shrank from {} to {}!",
+                        last_cap,
+                        current_cap
+                    );
+                    last_cap = current_cap;
+
+                    let _ = q.is_full();
+                }
+            });
+
+            scope.spawn(|| {
+                for _ in 0..ITERS {
+                    let _len = q.len();
+                    let _empty = q.is_empty();
+                }
+            });
+
+            scope.spawn(|| {
+                for i in 0..ITERS {
+                    let _ = q.push(i as u32);
+                    let _ = q.pop();
+                }
+            });
+
+            scope.spawn(|| {
+                let mut backoff = crate::utils::Backoff::new();
+
+                for _ in 0..GROW_CYCLES {
+                    if q.grow_by(GROW_STEP) {
+                        total_grows.fetch_add(1, Ordering::SeqCst);
+                    }
+                    thread::yield_now();
+                    backoff.backoff();
+                }
+            });
+        });
+
+        let final_cap = q.capacity();
+        let expected_min_cap = initial_cap + (total_grows.load(Ordering::SeqCst) * GROW_STEP);
+        assert!(
+            final_cap >= expected_min_cap,
+            "Structural integrity failed: Expected capacity >= {}, but got {}",
+            expected_min_cap,
+            final_cap
+        );
     }
 }

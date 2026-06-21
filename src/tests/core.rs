@@ -380,6 +380,7 @@ mod growable {
             mpsc_grow,
             oscillation_grow,
             smoke_grow,
+            suppl_methods_chaos,
         },
     };
 
@@ -505,6 +506,12 @@ mod growable {
         oscillation_grow(q);
     }
 
+    #[test]
+    fn suppl_methods_chaos_impl() {
+        let q = DynamicQueue::new(2);
+        suppl_methods_chaos(q);
+    }
+
     #[cfg(feature = "pool")]
     mod pool {
         use super::*;
@@ -572,6 +579,12 @@ mod growable {
         fn oscillation_grow_impl() {
             let q = PooledDynamicQueue::new(2);
             oscillation_grow(q);
+        }
+
+        #[test]
+        fn suppl_methods_chaos_impl() {
+            let q = PooledDynamicQueue::new(2);
+            suppl_methods_chaos(q);
         }
     }
 }

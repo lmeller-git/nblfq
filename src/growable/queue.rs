@@ -32,13 +32,6 @@ impl<T, Q> GrowableQueueCore<T, Q, Auto>
 where
     Q: NewSized,
 {
-    #[allow(dead_code)]
-    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
-    /// `T` must fit into the chosen slot type
-    pub fn new(size: usize) -> Self {
-        Self::with_slot::<Auto>(size)
-    }
-
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
     pub fn with_slot<S>(size: usize) -> GrowableQueueCore<T, Q, S> {
@@ -290,7 +283,6 @@ where
 
     fn is_empty(&self) -> bool {
         // the queue is empty if pop() returns None
-
         loop {
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
             if !self.register_reader(push_epoch) {
