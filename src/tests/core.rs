@@ -368,7 +368,7 @@ mod owned {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "dynamic")]
 mod growable {
     use super::*;
     use crate::{

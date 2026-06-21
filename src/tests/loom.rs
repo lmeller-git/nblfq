@@ -87,6 +87,7 @@ mod pooled {
     }
 }
 
+#[cfg(feature = "dynamic")]
 mod growable {
     use super::*;
     use crate::DynamicQueue;

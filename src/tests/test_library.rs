@@ -428,10 +428,10 @@ unsafe impl AsPackedValue for MaliciousCargo {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "dynamic")]
 pub(crate) use growth::*;
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "dynamic")]
 mod growth {
     use super::*;
     use crate::Growable;

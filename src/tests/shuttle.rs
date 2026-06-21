@@ -1,5 +1,4 @@
 use crate::{
-    Growable,
     MPMCQueue,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -183,69 +182,40 @@ where
     })
 }
 
-pub(crate) fn mpsc_grow<Q>(q: Q)
-where
-    Q: Growable + MPMCQueue<Item = u32> + Sync,
-{
-    const COUNT: usize = 20;
-    const THREADS: usize = 4;
-    const GROW_STEP: usize = 10;
+#[cfg(feature = "dynamic")]
+pub(crate) use growth::*;
 
-    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+#[cfg(feature = "dynamic")]
+mod growth {
+    use super::*;
+    use crate::Growable;
 
-    thread::scope(|scope| {
-        for _ in 0..THREADS {
-            scope.spawn(|| {
-                for i in 0..COUNT {
-                    loop {
-                        if q.push(i as u32).is_ok() {
-                            break;
+    pub(crate) fn mpsc_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        const COUNT: usize = 20;
+        const THREADS: usize = 4;
+        const GROW_STEP: usize = 10;
+
+        let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..COUNT {
+                        loop {
+                            if q.push(i as u32).is_ok() {
+                                break;
+                            }
+                            _ = q.grow_by(GROW_STEP);
+                            crate::utils::Backoff::new().backoff();
                         }
-                        _ = q.grow_by(GROW_STEP);
-                        crate::utils::Backoff::new().backoff();
                     }
-                }
-            });
-        }
-
-        for _ in 0..THREADS {
-            for _ in 0..COUNT {
-                let n = loop {
-                    if let Some(x) = q.pop() {
-                        break x;
-                    }
-                };
-                v[n as usize].fetch_add(1, Ordering::SeqCst);
+                });
             }
-        }
-    });
 
-    for c in v {
-        assert_eq!(c.load(Ordering::SeqCst), THREADS);
-    }
-}
-
-pub(crate) fn mpmc_grow<Q>(q: Q)
-where
-    Q: Growable + MPMCQueue<Item = u32> + Sync,
-{
-    const COUNT: usize = 30;
-    const RESIZERS: usize = 2;
-    const THREADS: usize = 2;
-
-    let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
-
-    thread::scope(|scope| {
-        for _ in 0..THREADS {
-            scope.spawn(|| {
-                for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
-                }
-            });
-        }
-
-        for _ in 0..THREADS {
-            scope.spawn(|| {
+            for _ in 0..THREADS {
                 for _ in 0..COUNT {
                     let n = loop {
                         if let Some(x) = q.pop() {
@@ -254,65 +224,103 @@ where
                     };
                     v[n as usize].fetch_add(1, Ordering::SeqCst);
                 }
-            });
-        }
+            }
+        });
 
-        for _ in 0..RESIZERS {
-            scope.spawn(|| {
-                for _ in 0..5 {
-                    q.grow_by(2);
-                    crate::utils::Backoff::new().backoff();
-                }
-            });
+        for c in v {
+            assert_eq!(c.load(Ordering::SeqCst), THREADS);
         }
-    });
-
-    for c in v {
-        assert_eq!(c.load(Ordering::SeqCst), THREADS);
     }
-}
 
-pub(crate) fn len_grow<Q>(q: Q)
-where
-    Q: MPMCQueue<Item = u32> + Sync + Growable,
-{
-    const COUNT: usize = 30;
-    const CAP: usize = 40;
+    pub(crate) fn mpmc_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        const COUNT: usize = 30;
+        const RESIZERS: usize = 2;
+        const THREADS: usize = 2;
 
-    thread::scope(|scope| {
-        scope.spawn(|| {
-            for i in 0..COUNT {
-                loop {
-                    if let Some(x) = q.pop() {
-                        assert_eq!(x, i as u32);
-                        break;
+        let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..COUNT {
+                        while q.push(i as u32).is_err() {}
                     }
+                });
+            }
+
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for _ in 0..COUNT {
+                        let n = loop {
+                            if let Some(x) = q.pop() {
+                                break x;
+                            }
+                        };
+                        v[n as usize].fetch_add(1, Ordering::SeqCst);
+                    }
+                });
+            }
+
+            for _ in 0..RESIZERS {
+                scope.spawn(|| {
+                    for _ in 0..5 {
+                        q.grow_by(2);
+                        crate::utils::Backoff::new().backoff();
+                    }
+                });
+            }
+        });
+
+        for c in v {
+            assert_eq!(c.load(Ordering::SeqCst), THREADS);
+        }
+    }
+
+    pub(crate) fn len_grow<Q>(q: Q)
+    where
+        Q: MPMCQueue<Item = u32> + Sync + Growable,
+    {
+        const COUNT: usize = 30;
+        const CAP: usize = 40;
+
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    loop {
+                        if let Some(x) = q.pop() {
+                            assert_eq!(x, i as u32);
+                            break;
+                        }
+                    }
+                    let len = q.len();
+                    assert!(len <= q.capacity());
                 }
-                let len = q.len();
-                assert!(len <= q.capacity());
-            }
+            });
+
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    while q.push(i as u32).is_err() {}
+                    let len = q.len();
+                    assert!(len <= q.capacity());
+                }
+            });
+
+            scope.spawn(|| {
+                const GROW_ITERS: usize = 3;
+
+                let mut backoff = crate::utils::Backoff::new();
+                for _ in 0..GROW_ITERS {
+                    let _ = q.grow_by(CAP / 2);
+                    backoff.backoff();
+                }
+            });
         });
 
-        scope.spawn(|| {
-            for i in 0..COUNT {
-                while q.push(i as u32).is_err() {}
-                let len = q.len();
-                assert!(len <= q.capacity());
-            }
-        });
-
-        scope.spawn(|| {
-            const GROW_ITERS: usize = 3;
-
-            let mut backoff = crate::utils::Backoff::new();
-            for _ in 0..GROW_ITERS {
-                let _ = q.grow_by(CAP / 2);
-                backoff.backoff();
-            }
-        });
-    });
-
-    assert_eq!(q.len(), 0);
+        assert_eq!(q.len(), 0);
+    }
 }
 
 cfg_atomic_tagged64! {
@@ -502,6 +510,7 @@ mod pool {
     }
 }
 
+#[cfg(feature = "dynamic")]
 mod growable {
     use super::*;
     use crate::DynamicQueue;
