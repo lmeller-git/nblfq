@@ -87,7 +87,7 @@ jobs:
         with:
           toolchain: stable
       - name: cargo test loom
-        run: cargo test --release --lib
+        run: cargo test --lib --features dynamic
         env:
           LOOM_MAX_PREEMPTIONS: 2
           RUSTFLAGS: "--cfg loom"
@@ -103,6 +103,6 @@ jobs:
         with:
           toolchain: stable
       - name: cargo test shuttle
-        run: cargo test --release --lib
+        run: cargo test --lib --features dynamic
         env:
           RUSTFLAGS: "--cfg shuttle"

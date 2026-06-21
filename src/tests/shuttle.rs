@@ -182,6 +182,145 @@ where
     })
 }
 
+#[cfg(feature = "dynamic")]
+pub(crate) use growth::*;
+
+#[cfg(feature = "dynamic")]
+mod growth {
+    use super::*;
+    use crate::Growable;
+
+    pub(crate) fn mpsc_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        const COUNT: usize = 20;
+        const THREADS: usize = 4;
+        const GROW_STEP: usize = 10;
+
+        let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..COUNT {
+                        loop {
+                            if q.push(i as u32).is_ok() {
+                                break;
+                            }
+                            _ = q.grow_by(GROW_STEP);
+                            crate::utils::Backoff::new().backoff();
+                        }
+                    }
+                });
+            }
+
+            for _ in 0..THREADS {
+                for _ in 0..COUNT {
+                    let n = loop {
+                        if let Some(x) = q.pop() {
+                            break x;
+                        }
+                    };
+                    v[n as usize].fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        });
+
+        for c in v {
+            assert_eq!(c.load(Ordering::SeqCst), THREADS);
+        }
+    }
+
+    pub(crate) fn mpmc_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        const COUNT: usize = 30;
+        const RESIZERS: usize = 2;
+        const THREADS: usize = 2;
+
+        let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..COUNT {
+                        while q.push(i as u32).is_err() {}
+                    }
+                });
+            }
+
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for _ in 0..COUNT {
+                        let n = loop {
+                            if let Some(x) = q.pop() {
+                                break x;
+                            }
+                        };
+                        v[n as usize].fetch_add(1, Ordering::SeqCst);
+                    }
+                });
+            }
+
+            for _ in 0..RESIZERS {
+                scope.spawn(|| {
+                    for _ in 0..5 {
+                        q.grow_by(2);
+                        crate::utils::Backoff::new().backoff();
+                    }
+                });
+            }
+        });
+
+        for c in v {
+            assert_eq!(c.load(Ordering::SeqCst), THREADS);
+        }
+    }
+
+    pub(crate) fn len_grow<Q>(q: Q)
+    where
+        Q: MPMCQueue<Item = u32> + Sync + Growable,
+    {
+        const COUNT: usize = 30;
+        const CAP: usize = 40;
+
+        thread::scope(|scope| {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    loop {
+                        if let Some(x) = q.pop() {
+                            assert_eq!(x, i as u32);
+                            break;
+                        }
+                    }
+                    let _len = q.len();
+                }
+            });
+
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    while q.push(i as u32).is_err() {}
+                    let _len = q.len();
+                }
+            });
+
+            scope.spawn(|| {
+                const GROW_ITERS: usize = 3;
+
+                let mut backoff = crate::utils::Backoff::new();
+                for _ in 0..GROW_ITERS {
+                    let _ = q.grow_by(CAP / 2);
+                    backoff.backoff();
+                }
+            });
+        });
+
+        assert_eq!(q.len(), 0);
+    }
+}
+
 cfg_atomic_tagged64! {
     mod taggedptr64 {
         use crate::{Queue, core::slots::Tagged64};
@@ -366,5 +505,195 @@ mod pool {
             },
             100,
         );
+    }
+}
+
+#[cfg(feature = "dynamic")]
+mod growable {
+    use super::*;
+    use crate::DynamicQueue;
+
+    #[test]
+    fn spsc_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                spsc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpmc_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                mpmc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpmc_ring_buffer_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                mpmc_ring_buffer(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpsc_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(3);
+                mpsc(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn linearizable_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(4);
+                linearizable(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpsc_grow_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(4);
+                mpsc_grow(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn mpmc_grow_impl() {
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(4);
+                mpmc_grow(q);
+            },
+            100,
+        );
+    }
+
+    #[test]
+    fn len_grow_impl() {
+        const CAP: usize = 40;
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(CAP);
+                len_grow(q);
+            },
+            100,
+        );
+    }
+
+    #[cfg(feature = "pool")]
+    mod pool {
+        use super::*;
+        use crate::PooledDynamicQueue;
+
+        #[test]
+        fn spsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    spsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    mpmc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_ring_buffer_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    mpmc_ring_buffer(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpsc_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(3);
+                    mpsc(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn linearizable_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    linearizable(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpsc_grow_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    mpsc_grow(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn mpmc_grow_impl() {
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    mpmc_grow(q);
+                },
+                100,
+            );
+        }
+
+        #[test]
+        fn len_grow_impl() {
+            const CAP: usize = 40;
+            shuttle::check_random(
+                || {
+                    let q = PooledDynamicQueue::new(CAP);
+                    len_grow(q);
+                },
+                100,
+            );
+        }
     }
 }

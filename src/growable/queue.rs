@@ -1,0 +1,422 @@
+use alloc::boxed::Box;
+use core::{marker::PhantomData, ptr::null_mut};
+
+use crate::{
+    Growable,
+    MPMCQueue,
+    core::{
+        AsPackedValue,
+        queue::QueueCore,
+        slots::{Auto, SlotType},
+    },
+    growable::NewSized,
+    owned::buffer::BoxedBuffer,
+    sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering},
+    utils::Backoff,
+};
+
+/// A lock-free non blocking queue, that may dynamically grow.
+pub(crate) struct GrowableQueueCore<T, Q, S = Auto> {
+    cores: [AtomicPtr<Q>; 2],
+    active_pushes: [AtomicUsize; 2],
+    active_reads: [AtomicUsize; 2],
+    push_epoch: AtomicUsize,
+    pop_epoch: AtomicUsize,
+    is_resizing: AtomicBool,
+    _slot: PhantomData<(S, T)>,
+}
+
+impl<T, Q> GrowableQueueCore<T, Q, Auto>
+where
+    Q: NewSized,
+{
+    #[allow(dead_code)]
+    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
+    /// `T` must fit into the chosen slot type
+    pub fn new(size: usize) -> Self {
+        Self::with_slot::<Auto>(size)
+    }
+
+    /// Constructs a new `Queue` with capacity `size` and slot type `S`.
+    /// `T` must fit into the slot type `S`
+    pub fn with_slot<S>(size: usize) -> GrowableQueueCore<T, Q, S> {
+        GrowableQueueCore {
+            cores: [
+                AtomicPtr::new(Box::into_raw(Box::new(Q::with_size(size)))),
+                AtomicPtr::new(Box::into_raw(Box::new(Q::with_size(1)))),
+            ],
+            active_pushes: [AtomicUsize::new(0), AtomicUsize::new(0)],
+            active_reads: [AtomicUsize::new(0), AtomicUsize::new(0)],
+            push_epoch: AtomicUsize::new(0),
+            pop_epoch: AtomicUsize::new(0),
+            is_resizing: AtomicBool::new(false),
+            _slot: PhantomData,
+        }
+    }
+}
+
+impl<T, Q, S> Drop for GrowableQueueCore<T, Q, S> {
+    fn drop(&mut self) {
+        let left = self.cores[0].swap(null_mut(), Ordering::SeqCst);
+        // Safety:
+        // No concurrent drops of this ds can happen.
+        // This queue was allocated in `new` or in `grow_by` with `Box::into_raw` and was not deallocated since then.
+        _ = unsafe { Box::from_raw(left) };
+
+        let right = self.cores[1].swap(null_mut(), Ordering::SeqCst);
+        // Safety:
+        // No concurrent drops of this ds can happen.
+        // This queue was allocated in `new` or in `grow_by` with `Box::into_raw` and was not deallocated since then.
+        _ = unsafe { Box::from_raw(right) };
+    }
+}
+
+impl<T, Q, S> Growable for GrowableQueueCore<T, Q, S>
+where
+    T: AsPackedValue,
+    Q: NewSized + MPMCQueue<Item = T>,
+{
+    fn grow_by(&self, by: usize) -> bool {
+        let pop_epoch = self.pop_epoch.load(Ordering::SeqCst);
+        let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+
+        if pop_epoch != push_epoch {
+            return false;
+        }
+
+        if self.active_reads[(push_epoch + 1) % 2].load(Ordering::SeqCst) != 0 {
+            // could happen if some thread started reading before pop_epoch got updated
+            return false;
+        }
+
+        if self.is_resizing.swap(true, Ordering::SeqCst) {
+            return false;
+        }
+
+        if self.push_epoch.load(Ordering::SeqCst) != push_epoch {
+            // could happen if an entire resize happens between load and this check
+            self.is_resizing.store(false, Ordering::SeqCst);
+            return false;
+        }
+
+        // at this poitn we know that
+        // a) no concurrent resize is happening
+        // b) since pop_epoch == push_epoch the old queue is empty.
+        // c) since pop_epoch == push_epoch AND active_reads == 0, we know that active_reads is STILL 0, becasue noone will acces the stale queue
+
+        let old_idx = (push_epoch + 1) % 2;
+        let mut backoff = Backoff::new();
+
+        while self.active_reads[old_idx].load(Ordering::SeqCst) != 0 {
+            backoff.backoff();
+        }
+
+        debug_assert_eq!(
+            self.active_pushes[(push_epoch + 1) % 2].load(Ordering::SeqCst),
+            0
+        );
+
+        let new_queue = Box::into_raw(Box::new(Q::with_size(self.capacity() + by)));
+
+        // Safety:
+        // since pop_epoch == push_epoch all concurrent threads acces the queue at push_epoch % 2.
+        // pop ensures that no pushes are in flight to the old queue anymore and that it is empty. We can safely drop it.
+        let old_queue = self.cores[(push_epoch + 1) % 2].swap(new_queue, Ordering::SeqCst);
+        self.push_epoch.fetch_add(1, Ordering::SeqCst);
+
+        // Safety:
+        // old_queue was ocnstucted from a Bos::into_raw and is dropped only once, as ensured by epoch guards
+        let q = unsafe { Box::from_raw(old_queue) };
+
+        debug_assert!(q.pop().is_none());
+
+        self.is_resizing.store(false, Ordering::SeqCst);
+        true
+    }
+}
+
+impl<T, Q, S> GrowableQueueCore<T, Q, S>
+where
+    T: AsPackedValue,
+{
+    fn get_queue(&self, epoch: usize) -> &Q {
+        let queue = self.cores[epoch % 2].load(Ordering::SeqCst);
+        // Safety:
+        // It is guranteed by `grow_by` that no concurrent mutable access can happen to any queue in cores.
+        // It is safe to access it concurrently via shared ref, as long as queue core is Sync.
+        unsafe { &*queue }
+    }
+
+    fn register_reader(&self, target_epoch: usize) -> bool {
+        self.active_reads[target_epoch % 2].fetch_add(1, Ordering::SeqCst);
+
+        let current_push = self.push_epoch.load(Ordering::SeqCst);
+        let current_pop = self.pop_epoch.load(Ordering::SeqCst);
+
+        // It is safe to read if the target epoch is still structurally active
+        if target_epoch != current_push && target_epoch != current_pop {
+            self.deregister_reader(target_epoch);
+            return false;
+        }
+        true
+    }
+
+    fn deregister_reader(&self, epoch: usize) {
+        self.active_reads[epoch % 2].fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl<T, Q, S> MPMCQueue for GrowableQueueCore<T, Q, S>
+where
+    T: AsPackedValue,
+    Q: MPMCQueue<Item = T>,
+{
+    type Item = T;
+
+    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+        loop {
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+            self.active_pushes[push_epoch % 2].fetch_add(1, Ordering::SeqCst);
+
+            if self.push_epoch.load(Ordering::SeqCst) == push_epoch {
+                let r = self.get_queue(push_epoch).push(item);
+
+                self.active_pushes[push_epoch % 2].fetch_sub(1, Ordering::SeqCst);
+                return r;
+            }
+            self.active_pushes[push_epoch % 2].fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+
+    fn pop(&self) -> Option<Self::Item> {
+        loop {
+            let pop_epoch = self.pop_epoch.load(Ordering::SeqCst);
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+
+            if pop_epoch != push_epoch {
+                // drain old buffer
+
+                if !self.register_reader(pop_epoch) {
+                    continue;
+                }
+
+                // it is safe to call get_queue on pop_epoch here, since no resize can happen while we have not updated pop_epoch and reads on this epoch are happening
+                let item = self.get_queue(pop_epoch).pop();
+
+                self.deregister_reader(pop_epoch);
+
+                if item.is_some() {
+                    return item;
+                }
+
+                if self.active_pushes[pop_epoch % 2].load(Ordering::SeqCst) == 0 {
+                    if !self.register_reader(pop_epoch) {
+                        continue;
+                    }
+
+                    let final_item = self.get_queue(pop_epoch).pop();
+
+                    self.deregister_reader(pop_epoch);
+
+                    if final_item.is_some() {
+                        return final_item;
+                    }
+
+                    _ = self.pop_epoch.compare_exchange_weak(
+                        pop_epoch,
+                        pop_epoch + 1,
+                        Ordering::SeqCst,
+                        Ordering::SeqCst,
+                    );
+                }
+
+                continue;
+            }
+
+            if !self.register_reader(push_epoch) {
+                continue;
+            }
+
+            let item = self.get_queue(push_epoch).pop();
+
+            self.deregister_reader(push_epoch);
+
+            return item;
+        }
+    }
+
+    fn capacity(&self) -> usize {
+        // the capacity of the currently active queue, i.e. the number of elements that can be pushed directly after resize
+        loop {
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+            if !self.register_reader(push_epoch) {
+                continue;
+            }
+            let cap = self.get_queue(push_epoch).capacity();
+            self.deregister_reader(push_epoch);
+            return cap;
+        }
+    }
+
+    fn len(&self) -> usize {
+        // the total elements in the queue. Note that len can be > capacity.
+        loop {
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+            if !self.register_reader(push_epoch) {
+                continue;
+            }
+
+            let pop_epoch = self.pop_epoch.load(Ordering::SeqCst);
+            let pop_len = if pop_epoch != push_epoch {
+                if !self.register_reader(pop_epoch) {
+                    self.deregister_reader(push_epoch);
+                    continue;
+                }
+
+                let pop_len = self.get_queue(pop_epoch).len();
+                self.deregister_reader(pop_epoch);
+                pop_len
+            } else {
+                0
+            };
+
+            let len = self.get_queue(push_epoch).len() + pop_len;
+            self.deregister_reader(push_epoch);
+            return len;
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        // the queue is empty if pop() returns None
+
+        loop {
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+            if !self.register_reader(push_epoch) {
+                continue;
+            }
+
+            let pop_epoch = self.pop_epoch.load(Ordering::SeqCst);
+            let pop_is_empty = if pop_epoch != push_epoch {
+                if !self.register_reader(pop_epoch) {
+                    self.deregister_reader(push_epoch);
+                    continue;
+                }
+
+                let pop_is_empty = self.get_queue(pop_epoch).is_empty();
+                self.deregister_reader(pop_epoch);
+                pop_is_empty
+            } else {
+                true
+            };
+
+            let is_empty = self.get_queue(push_epoch).is_empty() && pop_is_empty;
+            self.deregister_reader(push_epoch);
+            return is_empty;
+        }
+    }
+
+    fn is_full(&self) -> bool {
+        // the queue is full if push() fails
+        loop {
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+            if !self.register_reader(push_epoch) {
+                continue;
+            }
+            let is_full = self.get_queue(push_epoch).is_full();
+            self.deregister_reader(push_epoch);
+
+            return is_full;
+        }
+    }
+}
+
+impl<T, Q, S> NewSized for GrowableQueueCore<T, Q, S>
+where
+    Q: NewSized,
+{
+    fn with_size(size: usize) -> GrowableQueueCore<T, Q, S> {
+        GrowableQueueCore::with_slot(size)
+    }
+}
+
+impl<S> NewSized for QueueCore<BoxedBuffer<S>>
+where
+    S: Default,
+{
+    fn with_size(size: usize) -> Self {
+        Self::new_in(BoxedBuffer::new(size))
+    }
+}
+
+/// A lock-free non blocking queue, that may dynamically grow.
+pub struct DynamicQueue<T, S = Auto>
+where
+    S: SlotType<T>,
+    T: AsPackedValue,
+{
+    inner: GrowableQueueCore<T, QueueCore<BoxedBuffer<S::Slot>>, S>,
+}
+
+impl<T> DynamicQueue<T, Auto>
+where
+    T: AsPackedValue,
+{
+    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
+    /// `T` must fit into the chosen slot type
+    pub fn new(size: usize) -> Self {
+        Self::with_slot::<Auto>(size)
+    }
+
+    /// Constructs a new `Queue` with capacity `size` and slot type `S`.
+    /// `T` must fit into the slot type `S`
+    pub fn with_slot<S>(size: usize) -> DynamicQueue<T, S>
+    where
+        S: SlotType<T>,
+    {
+        DynamicQueue {
+            inner: GrowableQueueCore::with_slot::<S>(size),
+        }
+    }
+}
+
+impl<T, S> MPMCQueue for DynamicQueue<T, S>
+where
+    T: AsPackedValue,
+    S: SlotType<T>,
+{
+    type Item = T;
+
+    fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+        self.inner.push(item)
+    }
+
+    fn pop(&self) -> Option<Self::Item> {
+        self.inner.pop()
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn is_full(&self) -> bool {
+        self.inner.is_full()
+    }
+}
+
+impl<T, S> Growable for DynamicQueue<T, S>
+where
+    T: AsPackedValue,
+    S: SlotType<T>,
+{
+    fn grow_by(&self, by: usize) -> bool {
+        self.inner.grow_by(by)
+    }
+}

@@ -74,6 +74,7 @@ where
     const ITERS: usize = CAP / 20;
 
     assert_eq!(q.len(), 0);
+    assert!(q.is_empty());
     assert_eq!(q.capacity(), CAP);
 
     for _ in 0..CAP / 10 {
@@ -88,6 +89,7 @@ where
         }
     }
     assert_eq!(q.len(), 0);
+    assert!(q.is_empty());
 
     for i in 0..CAP {
         q.push(i as u32).unwrap();
@@ -101,6 +103,7 @@ where
         q.pop().unwrap();
     }
     assert_eq!(q.len(), 0);
+    assert!(q.is_empty());
 
     scope(|scope| {
         scope.spawn(|| {
@@ -422,5 +425,220 @@ unsafe impl AsPackedValue for MaliciousCargo {
         let decoded = unsafe { Self::decode(encoded) };
 
         decoded == zelf
+    }
+}
+
+#[cfg(feature = "dynamic")]
+pub(crate) use growth::*;
+
+#[cfg(feature = "dynamic")]
+mod growth {
+    use super::*;
+    use crate::Growable;
+
+    pub(crate) fn smoke_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32>,
+    {
+        let initial_cap = q.capacity();
+
+        for i in 0..initial_cap {
+            assert!(q.push(i as u32).is_ok());
+        }
+
+        assert!(q.is_full());
+        assert!(q.push(42).is_err());
+
+        assert!(q.grow_by(initial_cap));
+        assert_eq!(q.capacity(), initial_cap * 2);
+        assert!(!q.is_full());
+
+        let current_len = q.len();
+
+        for i in initial_cap..(initial_cap * 2) {
+            assert!(q.push(i as u32).is_ok());
+        }
+
+        assert!(q.len() > current_len);
+
+        for i in 0..(q.len()) {
+            assert_eq!(q.pop(), Some(i as u32));
+        }
+
+        assert!(q.is_empty())
+    }
+
+    pub(crate) fn mpsc_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        #[cfg(miri)]
+        const COUNT: usize = 100;
+        #[cfg(not(miri))]
+        const COUNT: usize = 10_000;
+        const THREADS: usize = 4;
+        const GROW_STEP: usize = 10;
+
+        let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..COUNT {
+                        loop {
+                            if q.push(i as u32).is_ok() {
+                                break;
+                            }
+                            _ = q.grow_by(GROW_STEP);
+                        }
+                    }
+                });
+            }
+
+            for _ in 0..THREADS {
+                for _ in 0..COUNT {
+                    let n = loop {
+                        if let Some(x) = q.pop() {
+                            break x;
+                        }
+                        crate::utils::Backoff::new().backoff();
+                    };
+                    v[n as usize].fetch_add(1, Ordering::SeqCst);
+                }
+            }
+        });
+
+        for c in v {
+            assert_eq!(c.load(Ordering::SeqCst), THREADS);
+        }
+    }
+
+    pub(crate) fn mpmc_grow<Q>(q: Q)
+    where
+        Q: Growable + MPMCQueue<Item = u32> + Sync,
+    {
+        #[cfg(miri)]
+        const COUNT: usize = 50;
+        #[cfg(not(miri))]
+        const COUNT: usize = 75_000;
+        const RESIZERS: usize = 2;
+        const THREADS: usize = 4;
+
+        let v = (0..COUNT).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
+
+        scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for i in 0..COUNT {
+                        while q.push(i as u32).is_err() {}
+                    }
+                });
+            }
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    for _ in 0..COUNT {
+                        let n = loop {
+                            if let Some(x) = q.pop() {
+                                break x;
+                            }
+                        };
+                        v[n as usize].fetch_add(1, Ordering::SeqCst);
+                    }
+                });
+            }
+            for _ in 0..RESIZERS {
+                scope.spawn(|| {
+                    for _ in 0..100 {
+                        q.grow_by(10);
+                        crate::utils::Backoff::new().backoff();
+                    }
+                });
+            }
+        });
+
+        for c in v {
+            assert_eq!(c.load(Ordering::SeqCst), THREADS);
+        }
+    }
+
+    pub(crate) fn len_grow<Q>(q: Q)
+    where
+        Q: MPMCQueue<Item = u32> + Sync + Growable,
+    {
+        #[cfg(miri)]
+        const COUNT: usize = 30;
+        #[cfg(not(miri))]
+        const COUNT: usize = 25_000;
+        #[cfg(miri)]
+        const CAP: usize = 40;
+        #[cfg(not(miri))]
+        const CAP: usize = 1000;
+        const ITERS: usize = CAP / 20;
+
+        assert_eq!(q.len(), 0);
+        assert_eq!(q.capacity(), CAP);
+
+        for _ in 0..CAP / 10 {
+            for i in 0..ITERS {
+                q.push(i as u32).unwrap();
+                assert_eq!(q.len(), i + 1);
+            }
+
+            for i in 0..ITERS {
+                q.pop().unwrap();
+                assert_eq!(q.len(), ITERS - i - 1);
+            }
+        }
+        assert_eq!(q.len(), 0);
+        assert!(q.is_empty());
+
+        for i in 0..CAP {
+            q.push(i as u32).unwrap();
+            assert_eq!(q.len(), i + 1);
+        }
+
+        assert!(q.is_full());
+        assert_eq!(q.len(), CAP);
+
+        for _ in 0..CAP {
+            q.pop().unwrap();
+        }
+        assert_eq!(q.len(), 0);
+
+        scope(|scope| {
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    loop {
+                        if let Some(x) = q.pop() {
+                            assert_eq!(x, i as u32);
+                            break;
+                        }
+                    }
+                    let _len = q.len();
+                }
+            });
+
+            scope.spawn(|| {
+                for i in 0..COUNT {
+                    while q.push(i as u32).is_err() {}
+                    let _len = q.len();
+                }
+            });
+
+            scope.spawn(|| {
+                #[cfg(miri)]
+                const GROW_ITERS: usize = 3;
+                #[cfg(not(miri))]
+                const GROW_ITERS: usize = 25;
+
+                let mut backoff = crate::utils::Backoff::new();
+                for _ in 0..GROW_ITERS {
+                    let _ = q.grow_by(CAP / 2);
+                    backoff.backoff();
+                }
+            });
+        });
+
+        assert_eq!(q.len(), 0);
     }
 }

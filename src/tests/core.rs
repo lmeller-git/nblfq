@@ -367,3 +367,180 @@ mod owned {
         }
     }
 }
+
+#[cfg(feature = "dynamic")]
+mod growable {
+    use super::*;
+    use crate::{
+        DynamicQueue,
+        tests::test_library::{len_grow, mpmc_grow, mpsc_grow, smoke_grow},
+    };
+
+    #[test]
+    fn smoke_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(2);
+        smoke(q);
+    }
+
+    #[test]
+    fn smoke_long_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(10);
+        smoke_long(q);
+    }
+
+    #[test]
+    fn len_empty_full_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(2);
+        len_empty_full(q);
+    }
+
+    #[test]
+    fn len_impl() {
+        #[cfg(miri)]
+        const CAP: usize = 40;
+        #[cfg(not(miri))]
+        const CAP: usize = 1000;
+
+        let q: DynamicQueue<_> = DynamicQueue::new(CAP);
+        len(q);
+    }
+
+    #[test]
+    fn spsc_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(3);
+        spsc(q);
+    }
+
+    #[test]
+    fn mpsc_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(3);
+        mpsc(q);
+    }
+
+    #[test]
+    fn mpmc_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(3);
+        mpmc(q);
+    }
+
+    #[test]
+    fn mpmc_ring_buffer_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(3);
+        mpmc_ring_buffer(q);
+    }
+
+    #[test]
+    fn linearizable_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(4);
+        linearizable(q);
+    }
+
+    #[cfg(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        not(target_pointer_width = "64")
+    ))]
+    #[test]
+    fn mpmc_ring_buf_ptr_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(4);
+        mpmc_ring_buf_ptr(q);
+    }
+
+    #[test]
+    fn force_push_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(4);
+        force_push(q);
+    }
+
+    #[test]
+    #[should_panic]
+    fn malicious_cargo_impl() {
+        let _q: DynamicQueue<MaliciousCargo> = DynamicQueue::new(4);
+    }
+
+    #[test]
+    fn smoke_grow_impl() {
+        let q = DynamicQueue::new(4);
+        smoke_grow(q);
+    }
+
+    #[test]
+    fn mpsc_grow_impl() {
+        let q = DynamicQueue::new(4);
+        mpsc_grow(q);
+    }
+
+    #[test]
+    fn mpmc_grow_impl() {
+        let q = DynamicQueue::new(4);
+        mpmc_grow(q);
+    }
+
+    #[test]
+    fn len_grow_impl() {
+        #[cfg(miri)]
+        const CAP: usize = 40;
+        #[cfg(not(miri))]
+        const CAP: usize = 1000;
+        let q = DynamicQueue::new(CAP);
+        len_grow(q);
+    }
+
+    #[cfg(feature = "pool")]
+    mod pool {
+        use super::*;
+        use crate::PooledDynamicQueue;
+
+        #[test]
+        fn smoke_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            smoke(q);
+        }
+
+        #[test]
+        fn smoke_long_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(10);
+            smoke_long(q);
+        }
+
+        #[test]
+        fn len_empty_full_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            len_empty_full(q);
+        }
+
+        #[test]
+        fn force_push_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            force_push(q);
+        }
+
+        #[test]
+        fn smoke_grow_impl() {
+            let q = PooledDynamicQueue::new(4);
+            smoke_grow(q);
+        }
+
+        #[test]
+        fn mpsc_grow_impl() {
+            let q = PooledDynamicQueue::new(4);
+            mpsc_grow(q);
+        }
+
+        #[test]
+        fn mpmc_grow_impl() {
+            let q = PooledDynamicQueue::new(4);
+            mpmc_grow(q);
+        }
+
+        #[test]
+        fn len_grow_impl() {
+            #[cfg(miri)]
+            const CAP: usize = 40;
+            #[cfg(not(miri))]
+            const CAP: usize = 1000;
+            let q = PooledDynamicQueue::new(CAP);
+            len_grow(q);
+        }
+    }
+}

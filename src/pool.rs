@@ -193,6 +193,27 @@ where
     }
 }
 
+#[cfg(feature = "dynamic")]
+mod growable {
+    use super::*;
+    use crate::growable::NewSized;
+
+    impl<T, Q, DataBuf, IndexQ> NewSized for Pooled<T, Q, DataBuf, IndexQ>
+    where
+        Q: MPMCQueue<Item = ItemHandle<T>> + NewSized,
+        DataBuf: Buffer<Slot = DataStorage<T>> + NewSized,
+        IndexQ: MPMCQueue<Item = IndexStorage> + NewSized,
+    {
+        fn with_size(size: usize) -> Self {
+            Self::new_from(
+                Q::with_size(size),
+                DataBuf::with_size(size),
+                IndexQ::with_size(size),
+            )
+        }
+    }
+}
+
 // cover is_rt_safe for ItemHandle<T>. This is not covered in any other case, since only ItemHandle<()>, which is zero sized is ever used.
 #[cfg(test)]
 mod tests {

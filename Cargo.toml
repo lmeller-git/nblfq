@@ -25,6 +25,7 @@ default = ["pool"]
 std = ["alloc"]
 alloc = []
 pool = []
+dynamic = ["alloc"]
 atomic-fallback = ["portable-atomic/fallback"]
 
 [dependencies]
