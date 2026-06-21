@@ -79,8 +79,9 @@ mod pooled_queue {
 
     /// A pooled `MPMCQueue`.
     ///
-    /// Unlike `Queue`, this queue may store any type, at thecost of higher runtime and higher memory.
-    /// Only available on feature `alloc` and `pool`
+    /// Unlike `Queue`, this queue may store any type, at the cost of higher runtime and higher memory.
+    ///
+    /// Only available on feature `alloc` + `pool`
     #[allow(private_bounds)]
     pub struct PooledQueue<T, S = Auto>
     where

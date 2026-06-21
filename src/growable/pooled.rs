@@ -22,10 +22,11 @@ where
     QueueCore<BoxedBuffer<<Auto as SlotType<IndexStorage>>::Slot>>,
 >;
 
-/// A pooled `MPMCQueue`.
+/// A dynamically growable, pooled `MPMCQueue`.
 ///
-/// Unlike `Queue`, this queue may store any type, at thecost of higher runtime and higher memory.
-/// Only available on feature `alloc` and `pool`
+/// Unlike `DynamicQueue`, this queue may store any type, at the cost of higher runtime and higher memory.
+///
+/// Only available on feature `dynamic` + `pool`
 #[allow(private_bounds)]
 pub struct PooledDynamicQueue<T, S = Auto>
 where
@@ -38,15 +39,13 @@ impl<T> PooledDynamicQueue<T, Auto>
 where
     T: AsPackedValue,
 {
-    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
-    /// `T` must fit into the chosen slot type
+    /// Constructs a new `PooledDynamicQueue` with capacity `size` and slot type `Auto`.
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
     #[allow(private_bounds)]
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
-    /// `T` must fit into the slot type `S`
     pub fn with_slot<S>(size: usize) -> PooledDynamicQueue<T, S>
     where
         S: SlotType<ItemHandle<T>>,

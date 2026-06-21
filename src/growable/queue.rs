@@ -350,7 +350,7 @@ where
     }
 }
 
-/// A lock-free non blocking queue, that may dynamically grow.
+/// A lock-free, non-blocking queue, that may dynamically grow its capacity.
 pub struct DynamicQueue<T, S = Auto>
 where
     S: SlotType<T>,
@@ -363,13 +363,13 @@ impl<T> DynamicQueue<T, Auto>
 where
     T: AsPackedValue,
 {
-    /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
+    /// Constructs a new `DynamicQueue` with capacity `size` and slot type `Auto`.
     /// `T` must fit into the chosen slot type
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
-    /// Constructs a new `Queue` with capacity `size` and slot type `S`.
+    /// Constructs a new `DynamicQueue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
     pub fn with_slot<S>(size: usize) -> DynamicQueue<T, S>
     where
