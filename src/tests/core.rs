@@ -373,7 +373,7 @@ mod growable {
     use super::*;
     use crate::{
         DynamicQueue,
-        tests::test_library::{mpmc_grow, mpsc_grow, smoke_grow},
+        tests::test_library::{len_grow, mpmc_grow, mpsc_grow, smoke_grow},
     };
 
     #[test]
@@ -471,8 +471,18 @@ mod growable {
     }
 
     #[test]
-    fn mpmc_grow_imp() {
+    fn mpmc_grow_impl() {
         let q = DynamicQueue::new(4);
         mpmc_grow(q);
+    }
+
+    #[test]
+    fn len_grow_impl() {
+        #[cfg(miri)]
+        const CAP: usize = 40;
+        #[cfg(not(miri))]
+        const CAP: usize = 1000;
+        let q = DynamicQueue::new(CAP);
+        len_grow(q);
     }
 }

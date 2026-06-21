@@ -1,4 +1,4 @@
-use std::ptr::null_mut;
+use core::ptr::null_mut;
 
 use crate::{
     Growable,
@@ -49,7 +49,7 @@ where
                     BoxedBuffer::new(size),
                 )))),
                 AtomicPtr::new(Box::into_raw(Box::new(QueueCore::new_in(
-                    BoxedBuffer::new(0),
+                    BoxedBuffer::new(1),
                 )))),
             ],
             active_pushes: [AtomicUsize::new(0), AtomicUsize::new(0)],
@@ -95,6 +95,7 @@ where
         }
 
         if self.active_reads[(push_epoch + 1) % 2].load(Ordering::SeqCst) != 0 {
+            // could happen if some thread started reading before pop_epoch got updated
             return false;
         }
 
@@ -103,6 +104,7 @@ where
         }
 
         if self.push_epoch.load(Ordering::SeqCst) != push_epoch {
+            // could happen if an entire resize happens between load and this check
             self.is_resizing.store(false, Ordering::SeqCst);
             return false;
         }
@@ -110,10 +112,17 @@ where
         // at this poitn we know that
         // a) no concurrent resize is happening
         // b) since pop_epoch == push_epoch the old queue is empty.
-        // c) since popo_epoch == push_epoch AND active_reads == 0, we know that active_reads is STILL 0, becasue noone will acces the stale queue
+        // c) since pop_epoch == push_epoch AND active_reads == 0, we know that active_reads is STILL 0, becasue noone will acces the stale queue
+
+        let old_idx = (push_epoch + 1) % 2;
+        let mut backoff = Backoff::new();
+
+        while self.active_reads[old_idx].load(Ordering::SeqCst) != 0 {
+            backoff.backoff();
+        }
 
         debug_assert_eq!(
-            self.active_reads[(push_epoch + 1) % 2].load(Ordering::SeqCst),
+            self.active_pushes[(push_epoch + 1) % 2].load(Ordering::SeqCst),
             0
         );
 
@@ -129,22 +138,9 @@ where
 
         // Safety:
         // old_queue was ocnstucted from a Bos::into_raw and is dropped only once, as ensured by epoch guards
-        _ = unsafe { Box::from_raw(old_queue) };
+        let q = unsafe { Box::from_raw(old_queue) };
 
-        let mut backoff = Backoff::new();
-
-        while self.active_pushes[pop_epoch % 2].load(Ordering::SeqCst) != 0 {
-            backoff.backoff();
-        }
-
-        if self.get_queue(pop_epoch).is_empty() {
-            _ = self.pop_epoch.compare_exchange(
-                pop_epoch,
-                pop_epoch + 1,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            );
-        }
+        debug_assert!(q.pop().is_none());
 
         self.is_resizing.store(false, Ordering::SeqCst);
         true
@@ -192,15 +188,16 @@ where
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
         loop {
-            let epoch = self.push_epoch.load(Ordering::SeqCst);
-            self.active_pushes[epoch % 2].fetch_add(1, Ordering::SeqCst);
-            if self.push_epoch.load(Ordering::SeqCst) == epoch {
-                let r = self.get_queue(epoch).push(item);
+            let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+            self.active_pushes[push_epoch % 2].fetch_add(1, Ordering::SeqCst);
 
-                self.active_pushes[epoch % 2].fetch_sub(1, Ordering::SeqCst);
+            if self.push_epoch.load(Ordering::SeqCst) == push_epoch {
+                let r = self.get_queue(push_epoch).push(item);
+
+                self.active_pushes[push_epoch % 2].fetch_sub(1, Ordering::SeqCst);
                 return r;
             }
-            self.active_pushes[epoch % 2].fetch_sub(1, Ordering::SeqCst);
+            self.active_pushes[push_epoch % 2].fetch_sub(1, Ordering::SeqCst);
         }
     }
 
@@ -226,6 +223,18 @@ where
                 }
 
                 if self.active_pushes[pop_epoch % 2].load(Ordering::SeqCst) == 0 {
+                    if !self.register_reader(pop_epoch) {
+                        continue;
+                    }
+
+                    let final_item = self.get_queue(pop_epoch).pop();
+
+                    self.deregister_reader(pop_epoch);
+
+                    if final_item.is_some() {
+                        return final_item;
+                    }
+
                     _ = self.pop_epoch.compare_exchange_weak(
                         pop_epoch,
                         pop_epoch + 1,

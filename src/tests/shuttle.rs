@@ -202,6 +202,7 @@ where
                             break;
                         }
                         _ = q.grow_by(GROW_STEP);
+                        crate::utils::Backoff::new().backoff();
                     }
                 }
             });
@@ -242,6 +243,7 @@ where
                 }
             });
         }
+
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for _ in 0..COUNT {
@@ -254,9 +256,10 @@ where
                 }
             });
         }
+
         for _ in 0..RESIZERS {
             scope.spawn(|| {
-                for _ in 0..3 {
+                for _ in 0..5 {
                     q.grow_by(2);
                     crate::utils::Backoff::new().backoff();
                 }
@@ -267,6 +270,49 @@ where
     for c in v {
         assert_eq!(c.load(Ordering::SeqCst), THREADS);
     }
+}
+
+pub(crate) fn len_grow<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = u32> + Sync + Growable,
+{
+    const COUNT: usize = 30;
+    const CAP: usize = 40;
+
+    thread::scope(|scope| {
+        scope.spawn(|| {
+            for i in 0..COUNT {
+                loop {
+                    if let Some(x) = q.pop() {
+                        assert_eq!(x, i as u32);
+                        break;
+                    }
+                }
+                let len = q.len();
+                assert!(len <= q.capacity());
+            }
+        });
+
+        scope.spawn(|| {
+            for i in 0..COUNT {
+                while q.push(i as u32).is_err() {}
+                let len = q.len();
+                assert!(len <= q.capacity());
+            }
+        });
+
+        scope.spawn(|| {
+            const GROW_ITERS: usize = 3;
+
+            let mut backoff = crate::utils::Backoff::new();
+            for _ in 0..GROW_ITERS {
+                let _ = q.grow_by(CAP / 2);
+                backoff.backoff();
+            }
+        });
+    });
+
+    assert_eq!(q.len(), 0);
 }
 
 cfg_atomic_tagged64! {
@@ -537,14 +583,15 @@ mod growable {
         );
     }
 
-    // #[test]
-    // fn replay() {
-    //     shuttle::replay(
-    //         || {
-    //             let q = DynamicQueue::new(4);
-    //             mpsc_grow(q)
-    //         },
-    //         "13817286080489804460",
-    //     );
-    // }
+    #[test]
+    fn len_grow_impl() {
+        const CAP: usize = 40;
+        shuttle::check_random(
+            || {
+                let q = DynamicQueue::new(CAP);
+                len_grow(q);
+            },
+            100,
+        );
+    }
 }
