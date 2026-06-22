@@ -2,7 +2,6 @@ use crate::{
     Growable,
     MPMCQueue,
     core::{
-        AsPackedValue,
         queue::QueueCore,
         slots::{Auto, SlotType},
     },
@@ -35,10 +34,7 @@ where
     inner: GrowableQueueCore<T, PooledBoxed<T, S>, S>,
 }
 
-impl<T> PooledDynamicQueue<T, Auto>
-where
-    T: AsPackedValue,
-{
+impl<T> PooledDynamicQueue<T, Auto> {
     /// Constructs a new `PooledDynamicQueue` with capacity `size` and slot type `Auto`.
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
@@ -58,7 +54,6 @@ where
 
 impl<T, S> MPMCQueue for PooledDynamicQueue<T, S>
 where
-    T: AsPackedValue,
     S: SlotType<ItemHandle<T>>,
 {
     type Item = T;
@@ -90,7 +85,6 @@ where
 
 impl<T, S> Growable for PooledDynamicQueue<T, S>
 where
-    T: AsPackedValue,
     S: SlotType<ItemHandle<T>>,
     GrowableQueueCore<T, PooledBoxed<T, S>, S>: Growable,
 {

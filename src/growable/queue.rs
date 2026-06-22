@@ -68,7 +68,6 @@ impl<T, Q, S> Drop for GrowableQueueCore<T, Q, S> {
 
 impl<T, Q, S> Growable for GrowableQueueCore<T, Q, S>
 where
-    T: AsPackedValue,
     Q: NewSized + MPMCQueue<Item = T>,
 {
     fn grow_by(&self, by: usize) -> bool {
@@ -130,10 +129,7 @@ where
     }
 }
 
-impl<T, Q, S> GrowableQueueCore<T, Q, S>
-where
-    T: AsPackedValue,
-{
+impl<T, Q, S> GrowableQueueCore<T, Q, S> {
     fn get_queue(&self, epoch: usize) -> &Q {
         let queue = self.cores[epoch % 2].load(Ordering::Acquire);
         // Safety:
@@ -163,7 +159,6 @@ where
 
 impl<T, Q, S> MPMCQueue for GrowableQueueCore<T, Q, S>
 where
-    T: AsPackedValue,
     Q: MPMCQueue<Item = T>,
 {
     type Item = T;
