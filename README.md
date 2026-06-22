@@ -4,6 +4,7 @@
 ![no_std Test](https://github.com/lmeller-git/nblf-queue/actions/workflows/nostd.yml/badge.svg?branch=main)
 [![Crates.io](https://img.shields.io/crates/v/nblf-queue)](https://crates.io/crates/nblf-queue)
 [![Docs.rs](https://docs.rs/nblf-queue/badge.svg)](https://docs.rs/nblf-queue)
+[![PyPI version](https://img.shields.io/pypi/v/nblf-queue)](https://pypi.org/project/nblf-queue)
 
 # nblf-queue
 
