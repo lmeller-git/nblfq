@@ -1,5 +1,6 @@
 from nblf_queue import Queue, DynamicQueue
 
+
 def test_queue_basic_push_pop():
     q: Queue[int] = Queue(5)
 
@@ -20,6 +21,7 @@ def test_queue_basic_push_pop():
     assert q.pop() is None
     assert q.is_empty()
 
+
 def test_queue_capacity_limits():
     q: Queue[str] = Queue(2)
 
@@ -31,6 +33,7 @@ def test_queue_capacity_limits():
 
     rejected = q.push("C")
     assert rejected == "C"
+
 
 def test_queue_force_push():
     q: Queue[int] = Queue(2)
@@ -45,15 +48,16 @@ def test_queue_force_push():
     assert q.pop() == 2
     assert q.pop() == 3
 
+
 def test_queue_force_push_and_do():
     q: Queue[int] = Queue(2)
     assert q.push(1) is None
     assert q.push(2) is None
 
     evicted: list[int] = []
+
     def callback(item: int) -> None:
         evicted.append(item)
-
 
     q.force_push_and_do(3, callback)
     q.force_push_and_do(4, callback)
@@ -61,6 +65,7 @@ def test_queue_force_push_and_do():
     assert evicted == [1, 2]
     assert q.pop() == 3
     assert q.pop() == 4
+
 
 def test_dynamic_queue_growth():
     q: DynamicQueue[int] = DynamicQueue(2)
@@ -78,6 +83,7 @@ def test_dynamic_queue_growth():
     assert q.push(3) is None
     assert q.push(4) is None
     assert q.len() == 4
+
 
 def test_dynamic_queue_grow_by():
     q: DynamicQueue[int] = DynamicQueue(2)

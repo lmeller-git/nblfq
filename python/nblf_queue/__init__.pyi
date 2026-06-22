@@ -1,8 +1,6 @@
 from typing import Callable, Generic, TypeVar
 
-
 _T = TypeVar("_T")
-
 
 class DynamicQueue(Generic[_T]):
     """
@@ -103,7 +101,6 @@ class DynamicQueue(Generic[_T]):
         Returns `True` if the capacity was successfully grown.
         """
         ...
-
 
 class Queue(Generic[_T]):
     """
