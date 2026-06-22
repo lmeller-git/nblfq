@@ -136,7 +136,7 @@ The core test-suite of this crate was adapted from [`crossbeam-queue`](https://g
 
 Current testing is based on:
 
-- **Miri** - to validate pointer arithmetic
+- **Miri** - to validate pointer arithmetic and catch UB
 - **Loom and Shuttle** - to test for race conditions
 - **ASan** - to check for memory corruption and leakage
 
