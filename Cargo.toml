@@ -1,6 +1,6 @@
 [package]
 name = "nblf-queue"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2024"
 authors = ["Louis Meller louis.meller@icloud.com"]
 description = "Atomic, lock-free MPMC queues based on the nblfq algorithm"
