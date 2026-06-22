@@ -431,6 +431,18 @@ unsafe impl AsPackedValue for MaliciousCargo {
     }
 }
 
+#[cfg(feature = "pool")]
+pub(crate) struct Large;
+
+#[cfg(feature = "pool")]
+pub(crate) fn pooled_stores_any<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = Large>,
+{
+    assert!(q.push(Large).is_ok());
+    assert!(q.pop().is_some());
+}
+
 #[cfg(feature = "dynamic")]
 pub(crate) use growth::*;
 

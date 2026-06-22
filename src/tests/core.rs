@@ -187,7 +187,7 @@ cfg_atomic_tagged128! {
 #[cfg(feature = "pool")]
 mod pool {
     use super::*;
-    use crate::array::PooledStaticQueue;
+    use crate::{array::PooledStaticQueue, tests::test_library::pooled_stores_any};
 
     #[test]
     fn smoke_impl() {
@@ -253,6 +253,12 @@ mod pool {
         let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
         force_push(q);
     }
+
+    #[test]
+    fn pooled_stores_any_impl() {
+        let q: PooledStaticQueue<_, 1> = PooledStaticQueue::default();
+        pooled_stores_any(q);
+    }
 }
 
 mod array {
@@ -316,7 +322,7 @@ mod owned {
     #[cfg(feature = "pool")]
     mod pool {
         use super::*;
-        use crate::owned::PooledQueue;
+        use crate::{owned::PooledQueue, tests::test_library::pooled_stores_any};
 
         #[test]
         fn smoke_impl() {
@@ -364,6 +370,12 @@ mod owned {
         fn force_push_mismatched_size_impl() {
             let q: PooledQueue<_> = PooledQueue::new_with_arena_size(2, 4);
             force_push(q);
+        }
+
+        #[test]
+        fn pooled_stores_any_impl() {
+            let q = PooledQueue::new(1);
+            pooled_stores_any(q);
         }
     }
 }
@@ -515,7 +527,7 @@ mod growable {
     #[cfg(feature = "pool")]
     mod pool {
         use super::*;
-        use crate::PooledDynamicQueue;
+        use crate::{PooledDynamicQueue, tests::test_library::pooled_stores_any};
 
         #[test]
         fn smoke_impl() {
@@ -585,6 +597,12 @@ mod growable {
         fn suppl_methods_chaos_impl() {
             let q = PooledDynamicQueue::new(2);
             suppl_methods_chaos(q);
+        }
+
+        #[test]
+        fn pooled_stores_any_impl() {
+            let q = PooledDynamicQueue::new(1);
+            pooled_stores_any(q);
         }
     }
 }
