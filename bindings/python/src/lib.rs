@@ -249,7 +249,7 @@ impl Queue {
     }
 }
 
-#[pymodule]
+#[pymodule(gil_used = false)]
 #[pyo3(name = "_nblf_queue_py")]
 fn nblf_queue_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Queue>()?;
