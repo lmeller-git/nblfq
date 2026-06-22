@@ -13,7 +13,7 @@ dependencies = [
 dev = [
   "pytest",
   "pytest-cov",
-  "maturin",
+  "maturin >= 1.9.4",
   "ruff>=0.15.15",
   "pyright>=1.1.410",
 ]
@@ -26,7 +26,7 @@ build-backend = "maturin"
 [tool.maturin]
 manifest-path = "bindings/python/Cargo.toml"
 module-name = "nblf_queue._nblf_queue_py"
-features = ["extension-module"]
+features = []
 python-source = "python"
 profile = "release"
 
