@@ -104,6 +104,32 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 
 - `default`: `pool`
 
+
+## Python Bindings
+
+Python bindings backed by `PooledQueue` and `PooledDynamicQueue` are available for concurrent applications.
+Core operations detach from the GIL to allow parallel execution.
+
+> [!NOTE]
+> The Python bindings strictly use `Auto` slots without feature `atomic-fallback`.
+> As a result, these bindings are only supported on platforms with native 64-bit or 128-bit atomic operations.
+
+```python
+  from nblf_queue import Queue, DynamicQueue
+
+  q: Queue[int] = Queue(10)
+
+  q.push(42)
+  item = q.pop()
+  assert item == 42
+
+  dq: DynamicQueue[str] = DynamicQueue(5)
+  dq.push("hello")
+
+  dq.grow()
+```
+
+
 ## Testing
 
 The core test-suite of this crate was adapted from [`crossbeam-queue`](https://github.com/crossbeam-rs/crossbeam/tree/main/crossbeam-queue).
