@@ -1,0 +1,26 @@
+[package]
+name = "nblf-queue-py"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+description.workspace = true
+
+[lib]
+name = "_nblf_queue_py"
+crate-type = ["cdylib"]
+
+[features]
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = { version = "0.28.2", features = ["multiple-pymethods"] }
+nblf-queue = { path = "../..", all-features = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,48 @@
+[project]
+name = "nblf-queue"
+version = "0.1.0"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+readme = "README.md"
+description = "Lock-free, non-blocking MPMC queues."
+dependencies = [
+]
+
+[dependency-groups]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "maturin",
+  "ruff>=0.15.15",
+  "pyright>=1.1.410",
+]
+
+
+[build-system]
+requires = ["maturin>=1.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+manifest-path = "bindings/python/Cargo.toml"
+module-name = "nblf_queue._nblf_queue_py"
+features = ["extension-module"]
+python-source = "python"
+profile = "release"
+
+[tool.ruff]
+cache-dir = ".ruff_cache"
+line-length = 100
+
+[tool.ruff.format]
+skip-magic-trailing-comma = true
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402"]
+
+[tool.pyright]
+include = ["python"]
+extraPaths = ["python"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.14"
