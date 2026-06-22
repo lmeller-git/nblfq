@@ -16,6 +16,7 @@ dev = [
   "maturin >= 1.9.4",
   "ruff>=0.15.15",
   "pyright>=1.1.410",
+  "pytest-benchmark>=5.2.3",
 ]
 
 

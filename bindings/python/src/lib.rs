@@ -49,19 +49,17 @@ impl DynamicQueue {
     /// Attempts to push an element into the queue.
     ///
     /// Returns the item, if the queue was full.
-    pub fn push(&self, py: Python<'_>, item: Py<PyAny>) -> Option<Py<PyAny>> {
-        py.detach(|| {
-            self.0
-                .push(PythonItem(item))
-                .map_or_else(|item| Some(item.0), |_| None)
-        })
+    pub fn push(&self, item: Py<PyAny>) -> Option<Py<PyAny>> {
+        self.0
+            .push(PythonItem(item))
+            .map_or_else(|item| Some(item.0), |_| None)
     }
 
     /// Attempts to pop an item from the queue.
     ///
     /// Returns `None` if the queue was empty.
-    pub fn pop(&self, py: Python<'_>) -> Option<Py<PyAny>> {
-        py.detach(|| self.0.pop().map(|item| item.0))
+    pub fn pop(&self) -> Option<Py<PyAny>> {
+        self.0.pop().map(|item| item.0)
     }
 
     /// Returns the current length of the queue.
@@ -97,8 +95,8 @@ impl DynamicQueue {
     /// This method may pop an arbitrary amount of items from the queue.
     ///
     /// Returns the last popped item, if the queue was full. All other items are dropped.
-    pub fn force_push(&self, py: Python<'_>, item: Py<PyAny>) -> Option<Py<PyAny>> {
-        py.detach(|| self.0.force_push(PythonItem(item)).map(|item| item.0))
+    pub fn force_push(&self, item: Py<PyAny>) -> Option<Py<PyAny>> {
+        self.0.force_push(PythonItem(item)).map(|item| item.0)
     }
 
     /// Pushes an item into the queue.
@@ -111,15 +109,12 @@ impl DynamicQueue {
         mut item: Py<PyAny>,
         f: Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        // TODO: move pop and push into one detach block
         let mut backoff = Backoff::new();
-        while let Some(item_) = self.push(py, item) {
+        while let Some(item_) = self.push(item) {
             item = item_;
 
-            let popped = py.detach(|| {
-                backoff.backoff();
-                self.0.pop().map(|item| item.0)
-            });
+            backoff.backoff();
+            let popped = self.pop();
 
             if let Some(next_popped_item) = popped {
                 f.call1((next_popped_item.bind(py),))?;
@@ -134,8 +129,8 @@ impl DynamicQueue {
     /// This method may spuriously fail.
     ///
     /// Returns `true` if the capacity was succesfully grown.
-    pub fn grow_by(&self, py: Python<'_>, by: usize) -> bool {
-        py.detach(|| self.0.grow_by(by))
+    pub fn grow_by(&self, by: usize) -> bool {
+        self.0.grow_by(by)
     }
 
     /// Attempts to grow the queues capacity using limited exponeintial growth..
@@ -143,10 +138,10 @@ impl DynamicQueue {
     /// This method may spuriously fail.
     ///
     /// Returns `true` if the capacity was succesfully grown.
-    pub fn grow(&self, py: Python<'_>) -> bool {
+    pub fn grow(&self) -> bool {
         let cap = self.capacity();
         let next_step = cap.min(1024);
-        self.grow_by(py, next_step)
+        self.grow_by(next_step)
     }
 }
 
@@ -168,19 +163,17 @@ impl Queue {
     /// Attempts to push an element into the queue.
     ///
     /// Returns the item, if the queue was full.
-    pub fn push(&self, py: Python<'_>, item: Py<PyAny>) -> Option<Py<PyAny>> {
-        py.detach(|| {
-            self.0
-                .push(PythonItem(item))
-                .map_or_else(|item| Some(item.0), |_| None)
-        })
+    pub fn push(&self, item: Py<PyAny>) -> Option<Py<PyAny>> {
+        self.0
+            .push(PythonItem(item))
+            .map_or_else(|item| Some(item.0), |_| None)
     }
 
     /// Attempts to pop an item from the queue.
     ///
     /// Returns `None` if the queue was empty.
-    pub fn pop(&self, py: Python<'_>) -> Option<Py<PyAny>> {
-        py.detach(|| self.0.pop().map(|item| item.0))
+    pub fn pop(&self) -> Option<Py<PyAny>> {
+        self.0.pop().map(|item| item.0)
     }
 
     /// Returns the current length of the queue.
@@ -216,8 +209,8 @@ impl Queue {
     /// This method may pop an arbitrary amount of items from the queue.
     ///
     /// Returns the last popped item, if the queue was full. All other items are dropped.
-    pub fn force_push(&self, py: Python<'_>, item: Py<PyAny>) -> Option<Py<PyAny>> {
-        py.detach(|| self.0.force_push(PythonItem(item)).map(|item| item.0))
+    pub fn force_push(&self, item: Py<PyAny>) -> Option<Py<PyAny>> {
+        self.0.force_push(PythonItem(item)).map(|item| item.0)
     }
 
     /// Pushes an item into the queue.
@@ -230,15 +223,12 @@ impl Queue {
         mut item: Py<PyAny>,
         f: Bound<'_, PyAny>,
     ) -> PyResult<()> {
-        // TODO: move pop and push into one detach block
         let mut backoff = Backoff::new();
-        while let Some(item_) = self.push(py, item) {
+        while let Some(item_) = self.push(item) {
             item = item_;
 
-            let popped = py.detach(|| {
-                backoff.backoff();
-                self.0.pop().map(|item| item.0)
-            });
+            backoff.backoff();
+            let popped = self.pop();
 
             if let Some(next_popped_item) = popped {
                 f.call1((next_popped_item.bind(py),))?;
