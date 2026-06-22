@@ -1,0 +1,154 @@
+name: Release Python
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit SHA to release (defaults to latest on branch)'
+        type: string
+      dry-run:
+          description: 'Dry run (build everything but do not publish anywhere)'
+          type: boolean
+          default: false
+      testpypi-only:
+        description: 'Publish to TestPyPI only (skip production PyPI)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  MATURIN_VERSION: 1.9.4
+  MATURIN_ARGS: --release
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  create-sdist:
+    name: Create Source Distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          manifest-path: bindings/python/Cargo.toml
+          maturin-version: ${{ env.MATURIN_VERSION }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: python-sdist
+          path: dist/*.tar.gz
+
+  build-wheels:
+    name: Build Wheels (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux GNU
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          # Linux MUSL (Alpine, containers)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            # macOS
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15
+            target: x86_64-apple-darwin
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          target: ${{ matrix.target }}
+          args: ${{ env.MATURIN_ARGS }} --out dist
+          manylinux: auto
+          manifest-path: bindings/python/Cargo.toml
+          maturin-version: ${{ env.MATURIN_VERSION }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: python-wheel-${{ matrix.target }}
+          path: dist/*.whl
+
+
+  publish-to-test-pypi:
+    name: Publish to TestPyPI
+    needs: [create-sdist, build-wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: release-python-test
+      url: https://test.pypi.org/project/nblf-queue
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to TestPyPI
+        if: ${{ !inputs.dry-run }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+          verbose: true
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: [create-sdist, build-wheels, publish-to-test-pypi]
+    runs-on: ubuntu-latest
+    environment:
+      name: release-python
+      url: https://pypi.org/project/nblf-queue
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        if: ${{ !inputs.dry-run && !inputs.testpypi-only }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          verbose: true

@@ -3,11 +3,17 @@ name = "nblf-queue"
 version = "0.1.0"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 readme = "README.md"
 description = "Lock-free, non-blocking MPMC queues."
-dependencies = [
+authors = [
+  { name = "Louis Meller", email = "louis.meller@icloud.com" },
 ]
+keywords = ["queue", "mpmc", "atomic", "lock-free"]
+
+[project.urls]
+Repository = "https://github.com/lmeller-git/nblf-queue"
+Documentation = "https://docs.rs/nblf-queue"
 
 [dependency-groups]
 dev = [
@@ -21,13 +27,12 @@ dev = [
 
 
 [build-system]
-requires = ["maturin>=1.0"]
+requires = ["maturin>=1.9.4"]
 build-backend = "maturin"
 
 [tool.maturin]
 manifest-path = "bindings/python/Cargo.toml"
 module-name = "nblf_queue._nblf_queue_py"
-features = []
 python-source = "python"
 profile = "release"
 
