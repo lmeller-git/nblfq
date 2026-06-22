@@ -20,7 +20,7 @@ extension-module = ["pyo3/extension-module"]
 
 [dependencies]
 pyo3 = { version = "0.28.2", features = ["multiple-pymethods"] }
-nblf-queue = { path = "../..", all-features = true }
+nblf-queue = { path = "../..", features = ["std", "pool", "dynamic", "atomic-fallback"] }
 
 [lints]
 workspace = true
