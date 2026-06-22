@@ -16,6 +16,7 @@ all-features = true
 [workspace]
 members = [
   ".",
+  "bindings/python",
   "profiling"
 ]
 
