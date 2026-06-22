@@ -123,7 +123,7 @@ impl<T> ItemHandle<T> {
 unsafe impl<T> AsPackedValue for ItemHandle<T> {
     const MIN_BIT_WIDTH: usize = 48;
 
-    fn encode(zelf: Self) -> crate::core::TruncatedU64<Self> {
+    fn encode(zelf: Self) -> TruncatedU64<Self> {
         debug_assert!(
             zelf.idx.idx <= 2_usize.pow(48),
             "Used an ItemHandle with an incompatible index. This either means misuse of the API,
@@ -132,7 +132,7 @@ unsafe impl<T> AsPackedValue for ItemHandle<T> {
         TruncatedU64::new(zelf.idx() as u64)
     }
 
-    unsafe fn decode(raw: crate::core::TruncatedU64<Self>) -> Self {
+    unsafe fn decode(raw: TruncatedU64<Self>) -> Self {
         Self::new(OwnedIdx::new(raw.read() as usize))
     }
 
@@ -222,6 +222,6 @@ mod tests {
 
     #[test]
     fn true_is_true() {
-        assert!(ItemHandle::<()>::is_rt_safe())
+        assert!(ItemHandle::<()>::is_rt_safe());
     }
 }

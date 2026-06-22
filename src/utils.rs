@@ -49,14 +49,14 @@ pub(crate) struct Backoff {
 }
 
 impl Backoff {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         #[cfg(all(not(shuttle), not(loom)))]
         return Self { state: 1 };
         #[cfg(any(shuttle, loom))]
         return Self {};
     }
 
-    pub fn backoff(&mut self) {
+    pub(crate) fn backoff(&mut self) {
         #[cfg(all(not(shuttle), not(loom)))]
         {
             for _ in 0..self.state {
@@ -83,6 +83,7 @@ pub(crate) fn comp(i: usize, u: u64, j: usize, v: u64, w_max: u64) -> bool {
 
 pub(crate) mod sealed {
     #[doc(hidden)]
+    #[allow(unnameable_types)]
     pub trait Sealed {}
 }
 
@@ -164,7 +165,7 @@ mod tests {
             assert_eq!((v1, sign_extend(v2)), (count, ptr2 as u64));
 
             let ptr: *const u8 = null();
-            assert_eq!(unpack!((0_u64): 48), (0, ptr as u64))
+            assert_eq!(unpack!((0_u64): 48), (0, ptr as u64));
         }
 
         #[test]
@@ -244,7 +245,7 @@ mod tests {
 
             let data = &4242;
             let count = 42;
-            let val = pack!((count, data as *const i32 as *const u8 as u128): 64);
+            let val = pack!((count, (data as *const i32).cast::<u8>() as u128): 64);
             let (count_, data_): (_, u128) = unpack!((val): 64);
             assert_eq!(count, count_);
             // Safety:

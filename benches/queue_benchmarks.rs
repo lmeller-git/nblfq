@@ -149,7 +149,7 @@ where
                 spin_loop();
             }
         }
-    })
+    });
 }
 
 fn run_queue_mpmc<Q>(q: Q)
@@ -215,7 +215,7 @@ mod dynamic {
 
     use super::*;
 
-    pub fn run_queue_mpsc_growing<Q>(q: Q, grow_step: usize)
+    pub(crate) fn run_queue_mpsc_growing<Q>(q: Q, grow_step: usize)
     where
         Q: MPMCQueue<Item = &'static usize> + Sync + Growable,
     {
@@ -242,10 +242,10 @@ mod dynamic {
                     spin_loop();
                 }
             }
-        })
+        });
     }
 
-    pub fn run_queue_mpmc_growing<Q>(q: Q, grow_step: usize)
+    pub(crate) fn run_queue_mpmc_growing<Q>(q: Q, grow_step: usize)
     where
         Q: MPMCQueue<Item = &'static usize> + Growable + Sync,
     {
@@ -292,12 +292,12 @@ fn bench_throughput_spsc(c: &mut Criterion) {
         group.throughput(criterion::Throughput::Elements(*size as u64));
 
         group.bench_with_input(format!("StaticQueue | size={size}"), &input, |b, i| {
-            b.iter(|| simple_sender::<StaticQueue<_, 64>>(StaticQueue::new(), i))
+            b.iter(|| simple_sender::<StaticQueue<_, 64>>(StaticQueue::new(), i));
         });
 
         #[cfg(feature = "dynamic")]
         group.bench_with_input(format!("DynamicQueue | size={size}"), &input, |b, i| {
-            b.iter(|| simple_sender::<DynamicQueue<_>>(DynamicQueue::new(64), i))
+            b.iter(|| simple_sender::<DynamicQueue<_>>(DynamicQueue::new(64), i));
         });
 
         #[cfg(feature = "pool")]
@@ -305,7 +305,7 @@ fn bench_throughput_spsc(c: &mut Criterion) {
             format!("PooledStaticQueue | size={size}"),
             &input,
             |b, i| {
-                b.iter(|| simple_sender::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new(), i))
+                b.iter(|| simple_sender::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new(), i));
             },
         );
 
@@ -314,7 +314,7 @@ fn bench_throughput_spsc(c: &mut Criterion) {
             format!("PooledDynamicQueue | size={size}"),
             &input,
             |b, i| {
-                b.iter(|| simple_sender::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(64), i))
+                b.iter(|| simple_sender::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(64), i));
             },
         );
 
@@ -334,27 +334,27 @@ fn bench_throughput_mpsc(c: &mut Criterion) {
     group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
     group.bench_function("StaticQueue", |b| {
-        b.iter(|| run_queue_mpsc::<StaticQueue<_, 64>>(StaticQueue::new()))
+        b.iter(|| run_queue_mpsc::<StaticQueue<_, 64>>(StaticQueue::new()));
     });
 
     #[cfg(feature = "dynamic")]
     group.bench_function("DynamicQueue", |b| {
-        b.iter(|| run_queue_mpsc::<DynamicQueue<_>>(DynamicQueue::new(64)))
+        b.iter(|| run_queue_mpsc::<DynamicQueue<_>>(DynamicQueue::new(64)));
     });
 
     #[cfg(feature = "pool")]
     group.bench_function("PooledStaticQueue", |b| {
-        b.iter(|| run_queue_mpsc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()))
+        b.iter(|| run_queue_mpsc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()));
     });
 
     #[cfg(all(feature = "dynamic", feature = "pool"))]
     group.bench_function("PooledDynamicQueue", |b| {
-        b.iter(|| run_queue_mpsc::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(64)))
+        b.iter(|| run_queue_mpsc::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(64)));
     });
 
     #[cfg(all(bench_crossbeam, feature = "alloc"))]
     group.bench_function("crossbeam_queue::ArrayQueue", |b| {
-        b.iter(|| run_queue_mpsc(CrossbeamWrapper::new(64)))
+        b.iter(|| run_queue_mpsc(CrossbeamWrapper::new(64)));
     });
 
     group.finish();
@@ -365,27 +365,27 @@ fn bench_throughput_mpmc(c: &mut Criterion) {
     group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
     group.bench_function("simple throughput static queue", |b| {
-        b.iter(|| run_queue_mpmc::<StaticQueue<_, 64>>(StaticQueue::new()))
+        b.iter(|| run_queue_mpmc::<StaticQueue<_, 64>>(StaticQueue::new()));
     });
 
     #[cfg(feature = "dynamic")]
     group.bench_function("throughput DynamicQueue", |b| {
-        b.iter(|| run_queue_mpmc::<DynamicQueue<_>>(DynamicQueue::new(64)))
+        b.iter(|| run_queue_mpmc::<DynamicQueue<_>>(DynamicQueue::new(64)));
     });
 
     #[cfg(feature = "pool")]
     group.bench_function("simple throughput pooled static queue", |b| {
-        b.iter(|| run_queue_mpmc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()))
+        b.iter(|| run_queue_mpmc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()));
     });
 
     #[cfg(all(feature = "dynamic", feature = "pool"))]
     group.bench_function("throughput PooledDynamicQueue", |b| {
-        b.iter(|| run_queue_mpmc::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(64)))
+        b.iter(|| run_queue_mpmc::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(64)));
     });
 
     #[cfg(all(bench_crossbeam, feature = "alloc"))]
     group.bench_function("crossbeam_queue::ArrayQueue", |b| {
-        b.iter(|| run_queue_mpmc(CrossbeamWrapper::new(64)))
+        b.iter(|| run_queue_mpmc(CrossbeamWrapper::new(64)));
     });
 
     group.finish();
@@ -399,27 +399,27 @@ fn bench_throughput_mpmc_cap(c: &mut Criterion) {
         group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
         group.bench_function(format!("Queue | cap={cap}"), |b| {
-            b.iter(|| run_queue_mpmc(Queue::new(cap)))
+            b.iter(|| run_queue_mpmc(Queue::new(cap)));
         });
 
         #[cfg(feature = "dynamic")]
         group.bench_function(format!("DynamicQueue | cap={cap}"), |b| {
-            b.iter(|| run_queue_mpmc::<DynamicQueue<_>>(DynamicQueue::new(cap)))
+            b.iter(|| run_queue_mpmc::<DynamicQueue<_>>(DynamicQueue::new(cap)));
         });
 
         #[cfg(feature = "pool")]
         group.bench_function(format!("PooledQueue | cap={cap}"), |b| {
-            b.iter(|| run_queue_mpmc(PooledQueue::new(cap)))
+            b.iter(|| run_queue_mpmc(PooledQueue::new(cap)));
         });
 
         #[cfg(all(feature = "dynamic", feature = "pool"))]
         group.bench_function(format!("PooledDynamicQueue | cap={cap}"), |b| {
-            b.iter(|| run_queue_mpmc::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(cap)))
+            b.iter(|| run_queue_mpmc::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(cap)));
         });
 
         #[cfg(bench_crossbeam)]
         group.bench_function(format!("crossbeam_queue::ArrayQueue | cap={cap}"), |b| {
-            b.iter(|| run_queue_mpmc(CrossbeamWrapper::new(cap)))
+            b.iter(|| run_queue_mpmc(CrossbeamWrapper::new(cap)));
         });
     }
     group.finish();
@@ -428,27 +428,27 @@ fn bench_throughput_mpmc_cap(c: &mut Criterion) {
 fn bench_push_pop(c: &mut Criterion) {
     let mut group = c.benchmark_group("push pop single thread");
     group.bench_function("StaticQueue", |b| {
-        b.iter(|| run_queue_single_thread::<StaticQueue<_, 2>>(StaticQueue::new()))
+        b.iter(|| run_queue_single_thread::<StaticQueue<_, 2>>(StaticQueue::new()));
     });
 
     #[cfg(feature = "dynamic")]
     group.bench_function("DynamicQueue", |b| {
-        b.iter(|| run_queue_single_thread::<DynamicQueue<_>>(DynamicQueue::new(2)))
+        b.iter(|| run_queue_single_thread::<DynamicQueue<_>>(DynamicQueue::new(2)));
     });
 
     #[cfg(feature = "pool")]
     group.bench_function("PooledStaticQueue", |b| {
-        b.iter(|| run_queue_single_thread::<PooledStaticQueue<_, 2>>(PooledStaticQueue::new()))
+        b.iter(|| run_queue_single_thread::<PooledStaticQueue<_, 2>>(PooledStaticQueue::new()));
     });
 
     #[cfg(all(feature = "dynamic", feature = "pool"))]
     group.bench_function("PooledDynamicQueue", |b| {
-        b.iter(|| run_queue_single_thread::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(2)))
+        b.iter(|| run_queue_single_thread::<PooledDynamicQueue<_>>(PooledDynamicQueue::new(2)));
     });
 
     #[cfg(all(bench_crossbeam, feature = "alloc"))]
     group.bench_function("crossbeam_queue::ArrayQueue", |b| {
-        b.iter(|| run_queue_single_thread(CrossbeamWrapper::new(2)))
+        b.iter(|| run_queue_single_thread(CrossbeamWrapper::new(2)));
     });
 
     group.finish();
@@ -462,17 +462,17 @@ fn bench_throughput_mpmc_growing(c: &mut Criterion) {
         group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
         group.bench_function(format!("DynamicQueue | step={step}"), |b| {
-            b.iter(|| run_queue_mpmc_growing(DynamicQueue::new(2), step))
+            b.iter(|| run_queue_mpmc_growing(DynamicQueue::new(2), step));
         });
 
         #[cfg(feature = "pool")]
         group.bench_function(format!("PooledDynamicQueue | step={step}"), |b| {
-            b.iter(|| run_queue_mpmc_growing(PooledDynamicQueue::new(2), step))
+            b.iter(|| run_queue_mpmc_growing(PooledDynamicQueue::new(2), step));
         });
 
         #[cfg(bench_crossbeam)]
         group.bench_function(format!("crossbeam::SegQueue | step={step}"), |b| {
-            b.iter(|| run_queue_mpmc_growing(SegQueueWrapper::new(), step))
+            b.iter(|| run_queue_mpmc_growing(SegQueueWrapper::new(), step));
         });
     }
     group.finish();
@@ -486,17 +486,17 @@ fn bench_throughput_mpsc_growing(c: &mut Criterion) {
         group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
         group.bench_function(format!("DynamicQueue | step={step}"), |b| {
-            b.iter(|| run_queue_mpsc_growing(DynamicQueue::new(2), step))
+            b.iter(|| run_queue_mpsc_growing(DynamicQueue::new(2), step));
         });
 
         #[cfg(feature = "pool")]
         group.bench_function(format!("PooledDynamicQueue | step={step}"), |b| {
-            b.iter(|| run_queue_mpsc_growing(PooledDynamicQueue::new(2), step))
+            b.iter(|| run_queue_mpsc_growing(PooledDynamicQueue::new(2), step));
         });
 
         #[cfg(bench_crossbeam)]
         group.bench_function(format!("crossbeam::SegQueue | step={step}"), |b| {
-            b.iter(|| run_queue_mpsc_growing(SegQueueWrapper::new(), step))
+            b.iter(|| run_queue_mpsc_growing(SegQueueWrapper::new(), step));
         });
     }
     group.finish();

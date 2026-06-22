@@ -32,7 +32,7 @@ where
                 while q.push(i as u32).is_err() {}
             }
         });
-    })
+    });
 }
 
 pub(crate) fn mpsc<Q>(q: Q)
@@ -179,7 +179,7 @@ where
                 }
             });
         }
-    })
+    });
 }
 
 #[cfg(feature = "dynamic")]
@@ -331,7 +331,7 @@ mod growth {
             }
         });
 
-        for count in tracking_vector.into_iter() {
+        for count in tracking_vector {
             assert_eq!(count.load(Ordering::SeqCst), THREADS);
         }
     }
@@ -446,9 +446,7 @@ mod growth {
 
                     assert!(
                         current_cap >= last_cap,
-                        "Monotonicity broken: Capacity shrank from {} to {}!",
-                        last_cap,
-                        current_cap
+                        "Monotonicity broken: Capacity shrank from {last_cap} to {current_cap}!",
                     );
                     last_cap = current_cap;
 
@@ -486,9 +484,7 @@ mod growth {
         let expected_min_cap = initial_cap + (total_grows.load(Ordering::SeqCst) * GROW_STEP);
         assert!(
             final_cap >= expected_min_cap,
-            "Structural integrity failed: Expected capacity >= {}, but got {}",
-            expected_min_cap,
-            final_cap
+            "Structural integrity failed: Expected capacity >= {expected_min_cap}, but got {final_cap}",
         );
     }
 }

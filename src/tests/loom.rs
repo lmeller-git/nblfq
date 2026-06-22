@@ -36,8 +36,8 @@ where
         }));
     }
 
-    for t in threads.into_iter() {
-        t.join().unwrap()
+    for t in threads {
+        t.join().unwrap();
     }
 }
 
@@ -83,7 +83,7 @@ mod pooled {
         loom::model(|| {
             let q = PooledQueue::new(2);
             linearizable(q);
-        })
+        });
     }
 }
 

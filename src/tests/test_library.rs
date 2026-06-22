@@ -1,7 +1,7 @@
 //! Testing for nblfqueue
 //!
 //! Tests adapted from crossbeam-queue's test suite.
-//! https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue
+//! <https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue>
 
 use std::{thread::scope, vec::Vec};
 
@@ -133,7 +133,7 @@ where
     assert_eq!(q.len(), 0);
 }
 
-pub fn force_push<Q>(q: Q)
+pub(crate) fn force_push<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32>,
 {
@@ -148,10 +148,10 @@ where
     assert!(q.push(42).is_err());
 
     for i in 0..q.capacity() {
-        assert!(q.force_push(42).is_some_and(|item| item == i as u32))
+        assert!(q.force_push(42).is_some_and(|item| item == i as u32));
     }
 
-    assert!(q.is_full())
+    assert!(q.is_full());
 }
 
 pub(crate) fn spsc<Q>(q: Q)
@@ -181,7 +181,7 @@ where
                 while q.push(i as u32).is_err() {}
             }
         });
-    })
+    });
 }
 
 pub(crate) fn mpsc<Q>(q: Q)
@@ -300,7 +300,7 @@ where
                 for i in 0..COUNT {
                     q.force_push_and_do(i as u32, |n| {
                         v[n as usize].fetch_add(1, Ordering::SeqCst);
-                    })
+                    });
                 }
 
                 t.fetch_sub(1, Ordering::SeqCst);
@@ -347,7 +347,7 @@ where
                 }
             });
         }
-    })
+    });
 }
 
 pub(crate) fn mpmc_ring_buf_ptr<Q>(q: Q)
@@ -390,7 +390,7 @@ where
                 for i in 0..COUNT {
                     q.force_push_and_do(Box::new(i), |n| {
                         v[*n].fetch_add(1, Ordering::SeqCst);
-                    })
+                    });
                 }
 
                 t.fetch_sub(1, Ordering::SeqCst);
@@ -470,7 +470,7 @@ mod growth {
             assert_eq!(q.pop(), Some(i as u32));
         }
 
-        assert!(q.is_empty())
+        assert!(q.is_empty());
     }
 
     pub(crate) fn mpsc_grow<Q>(q: Q)
@@ -625,7 +625,7 @@ mod growth {
             }
         });
 
-        for count in tracking_vector.into_iter() {
+        for count in tracking_vector {
             assert_eq!(count.load(Ordering::SeqCst), THREADS);
         }
     }
@@ -795,9 +795,7 @@ mod growth {
 
                     assert!(
                         current_cap >= last_cap,
-                        "Monotonicity broken: Capacity shrank from {} to {}!",
-                        last_cap,
-                        current_cap
+                        "Monotonicity broken: Capacity shrank from {last_cap} to {current_cap}!"
                     );
                     last_cap = current_cap;
 
@@ -836,9 +834,7 @@ mod growth {
         let expected_min_cap = initial_cap + (total_grows.load(Ordering::SeqCst) * GROW_STEP);
         assert!(
             final_cap >= expected_min_cap,
-            "Structural integrity failed: Expected capacity >= {}, but got {}",
-            expected_min_cap,
-            final_cap
+            "Structural integrity failed: Expected capacity >= {expected_min_cap}, but got {final_cap}",
         );
     }
 }

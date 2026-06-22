@@ -1,19 +1,19 @@
 #![allow(unused_imports)]
 
 #[cfg(any(not(test), all(not(loom), not(shuttle))))]
-pub use core_::*;
+pub(crate) use core_::*;
 #[cfg(all(loom, test))]
-pub use loom_::*;
+pub(crate) use loom_::*;
 #[cfg(all(shuttle, test))]
-pub use shuttle_::*;
+pub(crate) use shuttle_::*;
 
 #[cfg(all(shuttle, test))]
 mod shuttle_ {
     #[allow(unused_imports)]
-    pub use shuttle::hint;
-    pub use shuttle::{sync::atomic, thread};
+    pub(crate) use shuttle::hint;
+    pub(crate) use shuttle::{sync::atomic, thread};
 
-    pub mod cell {
+    pub(crate) mod cell {
         #[derive(Debug)]
         pub(crate) struct UnsafeCell<T>(core::cell::UnsafeCell<T>);
 
@@ -38,7 +38,7 @@ mod shuttle_ {
 
 #[cfg(all(loom, test))]
 mod loom_ {
-    pub use loom::{
+    pub(crate) use loom::{
         cell,
         hint,
         sync::{Arc, atomic},
@@ -48,7 +48,7 @@ mod loom_ {
 
 #[cfg(any(not(test), all(not(loom), not(shuttle))))]
 mod core_ {
-    pub mod cell {
+    pub(crate) mod cell {
         #[derive(Debug)]
         pub(crate) struct UnsafeCell<T>(core::cell::UnsafeCell<T>);
 
@@ -69,9 +69,9 @@ mod core_ {
             }
         }
     }
-    pub use core::hint;
+    pub(crate) use core::hint;
     #[cfg(feature = "std")]
-    pub use std::thread;
+    pub(crate) use std::thread;
 
-    pub use portable_atomic as atomic;
+    pub(crate) use portable_atomic as atomic;
 }

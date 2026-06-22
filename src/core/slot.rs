@@ -1,10 +1,10 @@
 use crate::core::{AsPackedValue, TruncatedU64};
 
 cfg_atomic_tagged128! {
-    pub use tagged_ptr_u128_portable::*;
+    pub(crate) use tagged_ptr_u128_portable::*;
 }
 cfg_atomic_tagged64! {
-    pub use tagged_ptr64::*;
+    pub(crate) use tagged_ptr64::*;
 }
 
 pub(crate) trait Slot: Default {
@@ -28,7 +28,7 @@ pub(crate) trait Slot: Default {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SlotComponents<S>
+pub(crate) struct SlotComponents<S>
 where
     S: Slot,
 {
@@ -53,7 +53,7 @@ where
     }
 
     pub(crate) fn put_count(&mut self, count: u64) {
-        self.value = S::put_count(self.value, count)
+        self.value = S::put_count(self.value, count);
     }
 
     pub(crate) fn set_empty(&mut self) {
@@ -77,6 +77,7 @@ cfg_atomic_tagged64! {
         // `count` takes up the upper 15 bits and `item` takes up the lower 48 bits.
         // this leaves 1 bit of state, which is used to encode `empty` vs `full`
 
+        #[allow(unnameable_types)]
         pub struct Tagged64<T: AsPackedValue> {
             state: AtomicU64,
             _data: PhantomData<T>,
@@ -94,7 +95,7 @@ cfg_atomic_tagged64! {
                     assert!(
                         Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH,
                         "the stored item must be representable with 48 or less bits"
-                    )
+                    );
                 };
 
                 if Self::MAX_CARGO_BIT_WIDTH < size_of::<T>() * 8 && !<T as AsPackedValue>::is_rt_safe() {
@@ -124,8 +125,8 @@ cfg_atomic_tagged64! {
                     .compare_exchange(
                         old.raw(),
                         new,
-                        core::sync::atomic::Ordering::AcqRel,
-                        core::sync::atomic::Ordering::Relaxed,
+                        Ordering::AcqRel,
+                        Ordering::Relaxed,
                     )
                     .map(|cargo| {
                         (!Self::is_empty(cargo)).then(||
@@ -198,6 +199,7 @@ cfg_atomic_tagged128! {
         // `count` takes up the upper 63 bits and `item` takes up the lower 64 bits.
         // this leaves 1 bit of state, which is used to encode `empty` vs `full`
 
+        #[allow(unnameable_types)]
         pub struct Tagged128<T: AsPackedValue> {
             storage: AtomicU128,
             _data: PhantomData<T>,
@@ -215,7 +217,7 @@ cfg_atomic_tagged128! {
                     assert!(
                         Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH,
                         "the stored item must be representable with 64 or less bits"
-                    )
+                    );
                 };
 
                 if Self::MAX_CARGO_BIT_WIDTH < size_of::<T>() * 8 && !<T as AsPackedValue>::is_rt_safe() {
@@ -245,8 +247,8 @@ cfg_atomic_tagged128! {
                     .compare_exchange(
                         old.raw(),
                         new,
-                        core::sync::atomic::Ordering::AcqRel,
-                        core::sync::atomic::Ordering::Relaxed,
+                        Ordering::AcqRel,
+                        Ordering::Relaxed,
                     )
                     .map(|cargo| {
                         (!Self::is_empty(cargo)).then(||

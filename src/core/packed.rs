@@ -28,7 +28,7 @@ pub unsafe trait AsPackedValue: Sized {
     /// The caller must ensure that the passed value is a valid value returned by `encode`
     unsafe fn decode(raw: TruncatedU64<Self>) -> Self;
 
-    /// Validates wether self is actually safe to pack into Self::MIN_BIT_WIDTH bits at runtime.
+    /// Validates wether self is actually safe to pack into `Self::MIN_BIT_WIDTH` bits at runtime.
     fn is_rt_safe() -> bool;
 }
 
@@ -164,7 +164,7 @@ unsafe impl AsPackedValue for () {
 
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
 
-/// Some x86_64 and aarch64 based hardware has support for level 5 pagetables / use more than 48 bits for pointers. These implementations are not safe on hardware using more that 48 bits for pointers.
+/// Some `x86_64` and aarch64 based hardware has support for level 5 pagetables / use more than 48 bits for pointers. These implementations are not safe on hardware using more that 48 bits for pointers.
 /// This invariant will be checked at runtime.
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 mod bit64 {
@@ -179,8 +179,7 @@ mod bit64 {
 
         assert!(
             (bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF),
-            "Pointer {:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits.",
-            raw
+            "Pointer {raw:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits.",
         );
     }
 
@@ -931,7 +930,7 @@ mod tests {
         let cloned = packed.clone();
 
         assert_eq!(packed, cloned);
-        assert_eq!(format!("{:?}", packed), format!("{:?}", cloned));
+        assert_eq!(format!("{packed:?}"), format!("{cloned:?}"));
     }
 
     macro_rules! generate_test {

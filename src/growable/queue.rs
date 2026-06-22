@@ -34,7 +34,7 @@ where
 {
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
-    pub fn with_slot<S>(size: usize) -> GrowableQueueCore<T, Q, S> {
+    pub(crate) fn with_slot<S>(size: usize) -> GrowableQueueCore<T, Q, S> {
         GrowableQueueCore {
             cores: [
                 AtomicPtr::new(Box::into_raw(Box::new(Q::with_size(size)))),

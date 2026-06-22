@@ -36,7 +36,7 @@ pub use owned::PooledQueue;
 #[cfg(any(feature = "alloc", test))]
 pub use owned::Queue;
 
-/// The main trait used to interface with a MPMCQueue.
+/// The main trait used to interface with a `MPMCQueue`.
 /// All implementations provided by this crate are atomic and non-blocking.
 /// Fallible operations of this trait may fail spuriously.
 ///
@@ -168,7 +168,7 @@ pub trait MPMCQueue {
     where
         F: FnMut(Self::Item),
     {
-        let mut backoff = crate::utils::Backoff::new();
+        let mut backoff = utils::Backoff::new();
         while let Err(item_) = self.push(item) {
             item = item_;
             backoff.backoff();

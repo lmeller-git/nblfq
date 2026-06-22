@@ -1,15 +1,14 @@
 [package]
 name = "nblf-queue"
 version = "0.1.12"
-edition = "2024"
-authors = ["Louis Meller louis.meller@icloud.com"]
-description = "Atomic, lock-free MPMC queues based on the nblfq algorithm"
-documentation = "https://docs.rs/nblf-queue"
-readme = "README.md"
-license = "MIT"
-repository = "https://github.com/lmeller-git/nblf-queue"
-keywords = ["queue", "mpmc", "no_std", "atomic", "lock-free"]
-categories = ["data-structures", "algorithms", "concurrency", "no-std"]
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+description.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
@@ -19,6 +18,17 @@ members = [
   ".",
   "profiling"
 ]
+
+[workspace.package]
+edition = "2024"
+authors = ["Louis Meller louis.meller@icloud.com"]
+description = "Atomic, lock-free MPMC queues based on the nblfq algorithm"
+documentation = "https://docs.rs/nblf-queue"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/lmeller-git/nblf-queue"
+keywords = ["queue", "mpmc", "no_std", "atomic", "lock-free"]
+categories = ["data-structures", "algorithms", "concurrency", "no-std"]
 
 [features]
 default = ["pool"]
@@ -44,14 +54,15 @@ shuttle = "0.8.1"
 [target.'cfg(bench_crossbeam)'.dev-dependencies]
 crossbeam-queue = "0.3.12"
 
-[lints.rust]
-unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)', 'cfg(bench_crossbeam)'] }
+[lints]
+workspace = true
 
 [[bench]]
 name = "queue_benchmarks"
 harness = false
 
 [workspace.lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)', 'cfg(bench_crossbeam)'] }
 rust_2018_idioms = { level = "warn", priority = -1 }
 unnameable_types = "warn"
 unreachable_pub = "warn"
@@ -68,7 +79,6 @@ collapsible_else_if = "allow"
 create_dir = "warn"
 dbg_macro = "warn"
 debug_assert_with_mut_call = "warn"
-doc_markdown = "warn"
 empty_enums = "warn"
 enum_glob_use = "warn"
 expl_impl_clone_on_copy = "warn"
@@ -117,5 +127,4 @@ todo = "warn"
 trait_duplication_in_bounds = "warn"
 uninlined_format_args = "warn"
 verbose_file_reads = "warn"
-wildcard_imports = "warn"
 zero_sized_map_values = "warn"
