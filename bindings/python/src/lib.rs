@@ -1,4 +1,4 @@
-use nblf_queue::{Growable, MPMCQueue, PooledDynamicQueue, PooledQueue};
+use nblf_queue::{MPMCQueue, PooledDynamicQueue, PooledQueue, Resize};
 use pyo3::prelude::*;
 
 const MAX_SPINLOOP: usize = 1024;
@@ -124,13 +124,13 @@ impl DynamicQueue {
         Ok(())
     }
 
-    /// Attempts to grow the queues capacity by `by` items.
+    /// Attempts to resize the queues capacity to `size` items.
     ///
     /// This method may spuriously fail.
     ///
     /// Returns `true` if the capacity was succesfully grown.
-    pub fn grow_by(&self, by: usize) -> bool {
-        self.0.grow_by(by)
+    pub fn resize(&self, size: usize) -> bool {
+        self.0.resize(size)
     }
 
     /// Attempts to grow the queues capacity using limited exponeintial growth..
@@ -141,7 +141,7 @@ impl DynamicQueue {
     pub fn grow(&self) -> bool {
         let cap = self.capacity();
         let next_step = cap.min(1024);
-        self.grow_by(next_step)
+        self.resize(next_step + cap)
     }
 }
 

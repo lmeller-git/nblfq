@@ -179,10 +179,10 @@ pub trait MPMCQueue {
     }
 }
 
-/// An extension trait for `MPMCQueue` that allows dynamic growth of the queue.
+/// An extension trait for `MPMCQueue` that allows dynamic resizing of the queue.
 ///
 /// This trait makes **no** guarantees regarding the synchronization model or
-/// blocking behavior of the `grow_by` method itself. It only guarantees that
+/// blocking behavior of the `resize` method itself. It only guarantees that
 /// the core `MPMCQueue` operations maintain their original guarantees.
 ///
 /// # Examples
@@ -190,14 +190,14 @@ pub trait MPMCQueue {
 /// ```rust
 /// #[cfg(feature = "dynamic")]
 /// fn run() {
-///  use nblf_queue::{DynamicQueue, MPMCQueue, Growable};
+///  use nblf_queue::{DynamicQueue, MPMCQueue, Resize};
 ///
 ///  let q = DynamicQueue::new(1);
 ///
 ///  assert!(q.push(1).is_ok());
 ///  assert!(q.is_full());
 ///
-///  assert!(q.grow_by(2));
+///  assert!(q.resize(2 + q.capacity()));
 ///
 ///  assert_eq!(q.capacity(), 3);
 ///  assert!(!q.is_full());
@@ -215,14 +215,14 @@ pub trait MPMCQueue {
 /// #[cfg(feature = "dynamic")]
 /// run();
 /// ```
-pub trait Growable: MPMCQueue {
-    /// Attempts to grow the capacity of the queue by `by` slots.
+pub trait Resize: MPMCQueue {
+    /// Attempts to resize the capacity of the queue to `size` slots.
     ///
     /// **Note:** This method may block or fail spuriously.
-    /// Further a growth event may not be considered finished until some time after the call to `grow_by`.
+    /// Further a growth event may not be considered finished until some time after the call to `resize`.
     ///
     /// Returns `true` if the resize was successfull, or `false` if
     /// it failed. Failure can occur due to allocator exhaustion, thread
     /// contention, or other implementation-specific conditions.
-    fn grow_by(&self, by: usize) -> bool;
+    fn resize(&self, size: usize) -> bool;
 }

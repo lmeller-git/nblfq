@@ -20,7 +20,7 @@ All queues in this repository are safe to use in a concurrent context and will n
 
 - **Static queues**: fixed-capacity queues backed by static storage
 - **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on feature `alloc`
-- **Dynamic queues**: dynamically growable queues, only available on feature `dynamic`
+- **Dynamic queues**: dynamically resizeable queues, only available on feature `dynamic`
 - **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`
 
 Non-pooled queues store items in atomically updated slots, restricting the stored items to small, pointer-like values.
@@ -74,7 +74,7 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 `PooledStaticQueue` and `PooledQueue` may store arbitrary types, at the cost of higher memory usage and runtime cost.
 
-`DynamicQueue` and `PooledDynamicQueue` may be grown dynamically, at the cost of higher total memory usage and runtime cost. This is cost is even higher for `PooledDynamicQueue`.
+`DynamicQueue` and `PooledDynamicQueue` may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
 
 ## Platform Support
 
@@ -99,7 +99,7 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 
 - `pool`: Enables pooled queues, which may store any type
 
-- `dynamic`: Enables dynamic queues, which may dynamically grow
+- `dynamic`: Enables dynamic queues, which may be dynamically resized
 
 - `atomic-fallback`: Uses `portable-atomic` `fallback` feature for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks
 
@@ -120,14 +120,16 @@ Core operations detach from the GIL to allow parallel execution.
 
   q: Queue[int] = Queue(10)
 
-  q.push(42)
+  assert q.push(42) is None
   item = q.pop()
   assert item == 42
 
-  dq: DynamicQueue[str] = DynamicQueue(5)
-  dq.push("hello")
+  dq: DynamicQueue[str] = DynamicQueue(1)
 
-  dq.grow()
+  assert dq.push("hello") is None
+  assert dq.resize(42)
+  assert dq.push("world") is None
+
 ```
 
 

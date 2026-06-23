@@ -451,11 +451,11 @@ mod growth {
     use std::{sync::Arc, thread};
 
     use super::*;
-    use crate::Growable;
+    use crate::Resize;
 
     pub(crate) fn smoke_grow<Q>(q: Q)
     where
-        Q: Growable + MPMCQueue<Item = u32>,
+        Q: Resize + MPMCQueue<Item = u32>,
     {
         let initial_cap = q.capacity();
 
@@ -466,7 +466,7 @@ mod growth {
         assert!(q.is_full());
         assert!(q.push(42).is_err());
 
-        assert!(q.grow_by(initial_cap));
+        assert!(q.resize(initial_cap * 2));
         assert_eq!(q.capacity(), initial_cap * 2);
         assert!(!q.is_full());
 
@@ -485,9 +485,44 @@ mod growth {
         assert!(q.is_empty());
     }
 
+    pub(crate) fn smoke_shrink<Q>(q: Q)
+    where
+        Q: Resize + MPMCQueue<Item = u32>,
+    {
+        let initial_cap = q.capacity();
+
+        for i in 0..initial_cap {
+            assert!(q.push(i as u32).is_ok());
+        }
+
+        assert!(q.is_full());
+        assert!(q.push(42).is_err());
+
+        assert!(q.resize(initial_cap / 2));
+        assert_eq!(q.capacity(), initial_cap / 2);
+
+        assert!(!q.is_empty());
+
+        let current_len = q.len();
+
+        for _ in 0..q.len() {
+            assert!(q.pop().is_some());
+        }
+
+        assert!(q.pop().is_none());
+
+        assert!(q.is_empty());
+        assert!(q.len() < current_len);
+
+        assert!(q.resize(1));
+        assert_eq!(q.capacity(), 1);
+        assert!(q.push(42).is_ok());
+        assert!(q.is_full());
+    }
+
     pub(crate) fn mpsc_grow<Q>(q: Q)
     where
-        Q: Growable + MPMCQueue<Item = u32> + Sync,
+        Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(miri)]
         const COUNT: usize = 100;
@@ -506,7 +541,7 @@ mod growth {
                             if q.push(i as u32).is_ok() {
                                 break;
                             }
-                            _ = q.grow_by(GROW_STEP);
+                            _ = q.resize(GROW_STEP + q.capacity());
                             crate::utils::Backoff::new().backoff();
                         }
                     }
@@ -531,9 +566,9 @@ mod growth {
         }
     }
 
-    pub(crate) fn mpmc_grow<Q>(q: Q)
+    pub(crate) fn mpmc_resize<Q>(q: Q)
     where
-        Q: Growable + MPMCQueue<Item = u32> + Sync,
+        Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(miri)]
         const COUNT: usize = 50;
@@ -549,7 +584,7 @@ mod growth {
                 scope.spawn(|| {
                     for i in 0..COUNT {
                         while q.push(i as u32).is_err() {
-                            _ = q.grow_by(10);
+                            _ = q.resize(10 + q.capacity());
                             crate::utils::Backoff::new().backoff();
                         }
                     }
@@ -573,7 +608,17 @@ mod growth {
                 scope.spawn(|| {
                     let mut backoff = crate::utils::Backoff::new();
                     for _ in 0..100 {
-                        q.grow_by(10);
+                        q.resize(10 + q.capacity());
+                        backoff.backoff();
+                    }
+                });
+            }
+
+            for _ in 0..RESIZERS {
+                scope.spawn(|| {
+                    let mut backoff = crate::utils::Backoff::new();
+                    for _ in 0..100 {
+                        q.resize(q.capacity().max(10) - 10);
                         backoff.backoff();
                     }
                 });
@@ -587,7 +632,7 @@ mod growth {
 
     pub(crate) fn grow_storm<Q>(q: Q)
     where
-        Q: Growable + MPMCQueue<Item = u32> + Sync,
+        Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(miri)]
         const THREADS: usize = 2;
@@ -605,7 +650,7 @@ mod growth {
                 scope.spawn(|| {
                     for i in 0..ITERS {
                         if i % 5 == 0 {
-                            let _ = q.grow_by(2);
+                            let _ = q.resize(2 + q.capacity());
                         }
 
                         let mut backoff = crate::utils::Backoff::new();
@@ -621,7 +666,7 @@ mod growth {
                 scope.spawn(|| {
                     for i in 0..ITERS {
                         if i % 3 == 0 {
-                            let _ = q.grow_by(1);
+                            let _ = q.resize(1 + q.capacity());
                         }
 
                         let mut backoff = crate::utils::Backoff::new();
@@ -644,7 +689,7 @@ mod growth {
 
     pub(crate) fn oscillation_grow<Q>(q: Q)
     where
-        Q: Growable + MPMCQueue<Item = u32> + Sync,
+        Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(not(miri))]
         const ITER: usize = 100;
@@ -659,7 +704,7 @@ mod growth {
                 for _ in 0..10 {
                     let mut backoff = crate::utils::Backoff::new();
                     for _ in 0..50 {
-                        if q.grow_by(10) {
+                        if q.resize(10 + q.capacity()) {
                             break;
                         }
                         backoff.backoff();
@@ -702,7 +747,7 @@ mod growth {
 
     pub(crate) fn len_grow<Q>(q: Q)
     where
-        Q: MPMCQueue<Item = u32> + Sync + Growable,
+        Q: MPMCQueue<Item = u32> + Sync + Resize,
     {
         #[cfg(miri)]
         const COUNT: usize = 30;
@@ -772,7 +817,7 @@ mod growth {
 
                 let mut backoff = crate::utils::Backoff::new();
                 for _ in 0..GROW_ITERS {
-                    let _ = q.grow_by(CAP / 2);
+                    let _ = q.resize(CAP / 2 + q.capacity());
                     backoff.backoff();
                 }
             });
@@ -783,7 +828,7 @@ mod growth {
 
     pub(crate) fn suppl_methods_chaos<Q>(q: Q)
     where
-        Q: Growable + MPMCQueue<Item = u32> + Sync,
+        Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(not(miri))]
         const ITERS: usize = 10_000;
@@ -833,7 +878,7 @@ mod growth {
                 let mut backoff = crate::utils::Backoff::new();
 
                 for _ in 0..GROW_CYCLES {
-                    if q.grow_by(GROW_STEP) {
+                    if q.resize(GROW_STEP + q.capacity()) {
                         total_grows.fetch_add(1, Ordering::SeqCst);
                     }
                     thread::yield_now();

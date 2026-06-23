@@ -388,10 +388,11 @@ mod growable {
         tests::test_library::{
             grow_storm,
             len_grow,
-            mpmc_grow,
+            mpmc_resize,
             mpsc_grow,
             oscillation_grow,
             smoke_grow,
+            smoke_shrink,
             suppl_methods_chaos,
         },
     };
@@ -400,6 +401,12 @@ mod growable {
     fn smoke_impl() {
         let q: DynamicQueue<_> = DynamicQueue::new(2);
         smoke(q);
+    }
+
+    #[test]
+    fn smoke_shrink_impl() {
+        let q = DynamicQueue::new(2);
+        smoke_shrink(q);
     }
 
     #[test]
@@ -491,9 +498,9 @@ mod growable {
     }
 
     #[test]
-    fn mpmc_grow_impl() {
+    fn mpmc_resize_impl() {
         let q = DynamicQueue::new(4);
-        mpmc_grow(q);
+        mpmc_resize(q);
     }
 
     #[test]
@@ -536,6 +543,12 @@ mod growable {
         }
 
         #[test]
+        fn smoke_shrink_impl() {
+            let q = PooledDynamicQueue::new(2);
+            smoke_shrink(q);
+        }
+
+        #[test]
         fn smoke_long_impl() {
             let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(10);
             smoke_long(q);
@@ -566,9 +579,9 @@ mod growable {
         }
 
         #[test]
-        fn mpmc_grow_impl() {
+        fn mpmc_resize_impl() {
             let q = PooledDynamicQueue::new(4);
-            mpmc_grow(q);
+            mpmc_resize(q);
         }
 
         #[test]

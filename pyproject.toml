@@ -36,6 +36,10 @@ module-name = "nblf_queue._nblf_queue_py"
 python-source = "python"
 profile = "release"
 
+[tool.pytest.ini_options]
+norecursedirs = ["target", ".git", ".venv"]
+testpaths = ["python/tests"]
+
 [tool.ruff]
 cache-dir = ".ruff_cache"
 line-length = 100

@@ -82,9 +82,9 @@ class DynamicQueue(Generic[_T]):
         """
         ...
 
-    def grow_by(self, by: int) -> bool:
+    def resize(self, size: int) -> bool:
         """
-        Attempts to grow the queue's capacity by `by` items.
+        Attempts to resize the queue's capacity to `size` items.
 
         This method may spuriously fail.
 

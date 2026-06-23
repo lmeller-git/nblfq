@@ -1,6 +1,6 @@
 use crate::{
-    Growable,
     MPMCQueue,
+    Resize,
     core::{
         queue::QueueCore,
         slots::{Auto, SlotType},
@@ -21,7 +21,7 @@ where
     QueueCore<BoxedBuffer<<Auto as SlotType<IndexStorage>>::Slot>>,
 >;
 
-/// A dynamically growable, pooled `MPMCQueue`.
+/// A dynamically resizeable, pooled `MPMCQueue`.
 ///
 /// Unlike `DynamicQueue`, this queue may store any type, at the cost of higher runtime and higher memory.
 ///
@@ -83,12 +83,12 @@ where
     }
 }
 
-impl<T, S> Growable for PooledDynamicQueue<T, S>
+impl<T, S> Resize for PooledDynamicQueue<T, S>
 where
     S: SlotType<ItemHandle<T>>,
-    GrowableQueueCore<T, PooledBoxed<T, S>, S>: Growable,
+    GrowableQueueCore<T, PooledBoxed<T, S>, S>: Resize,
 {
-    fn grow_by(&self, by: usize) -> bool {
-        self.inner.grow_by(by)
+    fn resize(&self, size: usize) -> bool {
+        self.inner.resize(size)
     }
 }

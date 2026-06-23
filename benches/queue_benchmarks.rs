@@ -13,8 +13,6 @@ use crossbeam_queue::ArrayQueue;
 use crossbeam_queue::SegQueue;
 #[cfg(feature = "dynamic")]
 use nblf_queue::DynamicQueue;
-#[cfg(feature = "dynamic")]
-use nblf_queue::Growable;
 #[cfg(all(feature = "dynamic", feature = "pool"))]
 use nblf_queue::PooledDynamicQueue;
 #[cfg(all(feature = "alloc", feature = "pool"))]
@@ -23,6 +21,8 @@ use nblf_queue::PooledQueue;
 use nblf_queue::PooledStaticQueue;
 #[cfg(feature = "alloc")]
 use nblf_queue::Queue;
+#[cfg(feature = "dynamic")]
+use nblf_queue::Resize;
 use nblf_queue::{MPMCQueue, StaticQueue};
 
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
@@ -101,7 +101,7 @@ mod crossbeam_ {
             }
         }
 
-        impl<T> Growable for SegQueueWrapper<T> {
+        impl<T> Resize for SegQueueWrapper<T> {
             fn grow_by(&self, _by: usize) -> bool {
                 true
             }
@@ -217,7 +217,7 @@ mod dynamic {
 
     pub(crate) fn run_queue_mpsc_growing<Q>(q: Q, grow_step: usize)
     where
-        Q: MPMCQueue<Item = &'static usize> + Sync + Growable,
+        Q: MPMCQueue<Item = &'static usize> + Sync + Resize,
     {
         assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
 
@@ -226,7 +226,7 @@ mod dynamic {
                 scope.spawn(|| {
                     for _ in 0..ITER_PER_THREAD {
                         while q.push(black_box(&1)).is_err() {
-                            _ = q.grow_by(grow_step);
+                            _ = q.resize(grow_step);
                             spin_loop();
                         }
                     }
@@ -247,7 +247,7 @@ mod dynamic {
 
     pub(crate) fn run_queue_mpmc_growing<Q>(q: Q, grow_step: usize)
     where
-        Q: MPMCQueue<Item = &'static usize> + Growable + Sync,
+        Q: MPMCQueue<Item = &'static usize> + Resize + Sync,
     {
         assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
 
@@ -258,7 +258,7 @@ mod dynamic {
                 scope.spawn(|| {
                     for _ in 0..ITER_PER_THREAD {
                         while q.push(black_box(&1)).is_err() {
-                            _ = q.grow_by(grow_step);
+                            _ = q.resize(grow_step);
                             spin_loop();
                         }
                     }

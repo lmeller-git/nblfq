@@ -89,6 +89,6 @@ def test_dynamic_queue_grow_by():
     q: DynamicQueue[int] = DynamicQueue(2)
     assert q.capacity() == 2
 
-    grown = q.grow_by(5)
+    grown = q.resize(5 + q.capacity())
     assert grown is True
     assert q.capacity() == 7

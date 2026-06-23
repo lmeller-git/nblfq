@@ -4,8 +4,8 @@ use core::{marker::PhantomData, ptr::null_mut};
 use crossbeam_utils::CachePadded;
 
 use crate::{
-    Growable,
     MPMCQueue,
+    Resize,
     core::{
         AsPackedValue,
         queue::QueueCore,
@@ -66,11 +66,14 @@ impl<T, Q, S> Drop for GrowableQueueCore<T, Q, S> {
     }
 }
 
-impl<T, Q, S> Growable for GrowableQueueCore<T, Q, S>
+impl<T, Q, S> Resize for GrowableQueueCore<T, Q, S>
 where
     Q: NewSized + MPMCQueue<Item = T>,
 {
-    fn grow_by(&self, by: usize) -> bool {
+    fn resize(&self, size: usize) -> bool {
+        if size == 0 {
+            return false;
+        }
         let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
         let push_epoch = self.push_epoch.load(Ordering::Acquire);
 
@@ -110,7 +113,7 @@ where
             0
         );
 
-        let new_queue = Box::into_raw(Box::new(Q::with_size(self.capacity() + by)));
+        let new_queue = Box::into_raw(Box::new(Q::with_size(size)));
 
         // Safety:
         // since pop_epoch == push_epoch all concurrent threads acces the queue at push_epoch % 2.
@@ -119,7 +122,7 @@ where
         self.push_epoch.fetch_add(1, Ordering::Release);
 
         // Safety:
-        // old_queue was ocnstucted from a Bos::into_raw and is dropped only once, as ensured by epoch guards
+        // old_queue was ocnstucted from a Box::into_raw and is dropped only once, as ensured by epoch guards
         let q = unsafe { Box::from_raw(old_queue) };
 
         debug_assert!(q.pop().is_none());
@@ -337,7 +340,7 @@ where
     }
 }
 
-/// A lock-free, non-blocking queue, that may dynamically grow its capacity.
+/// A lock-free, non-blocking queue, that may dynamically resize its capacity.
 pub struct DynamicQueue<T, S = Auto>
 where
     S: SlotType<T>,
@@ -400,12 +403,12 @@ where
     }
 }
 
-impl<T, S> Growable for DynamicQueue<T, S>
+impl<T, S> Resize for DynamicQueue<T, S>
 where
     T: AsPackedValue,
     S: SlotType<T>,
 {
-    fn grow_by(&self, by: usize) -> bool {
-        self.inner.grow_by(by)
+    fn resize(&self, size: usize) -> bool {
+        self.inner.resize(size)
     }
 }
