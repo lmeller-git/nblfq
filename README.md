@@ -18,10 +18,10 @@ All queues in this repository are safe to use in a concurrent context and will n
 
 ## Queue variants
 
-- **Static queues**: fixed-capacity queues backed by static storage
-- **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on feature `alloc`
-- **Dynamic queues**: dynamically resizeable queues, only available on feature `dynamic`
-- **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`
+- **Static queues**: fixed-capacity queues backed by static storage.
+- **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on feature `alloc`.
+- **Dynamic queues**: dynamically resizeable queues, only available on feature `dynamic`.
+- **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`.
 
 Non-pooled queues store items in atomically updated slots, restricting the stored items to small, pointer-like values.
 
@@ -68,6 +68,32 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 ```
 
 
+`nblf_queue::DynamicQueue`:
+
+```rust
+  #[cfg(feature = "dynamic")]
+  fn run() {
+    use nblf_queue::{DynamicQueue, MPMCQueue, Resize};
+
+    let q = DynamicQueue::new(1);
+
+    assert!(q.push(42).is_ok());
+    assert!(q.push(4242).is_err());
+
+    assert!(q.resize(2));
+    assert_eq!(q.capacity(), 2);
+    assert!(q.push(4242).is_ok());
+
+    assert_eq!(q.pop(), Some(42));
+    assert_eq!(q.pop(), Some(4242));
+    assert!(q.pop().is_none());
+  }
+
+  #[cfg(feature = "dynamic")]
+  run();
+```
+
+
 ## Choosing a queue type
 
 `StaticQueue` and `Queue` may only store small values and are optimized for this use case.
@@ -80,9 +106,9 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 Multiple storage types are available, dependent on platform:
 
-- **Tagged64** - platforms with native 64-bit atomic operations or feature `atomic-fallback`
+- **Tagged64** - platforms with native 64-bit atomic operations or feature `atomic-fallback`.
 
-- **Tagged128** - platforms with native 128-bit atomic operations or feature `atomic-fallback`
+- **Tagged128** - platforms with native 128-bit atomic operations or feature `atomic-fallback`.
 
 Storage types will be chosen automatically, unless sepcified explicitly.
 
@@ -93,15 +119,15 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 
 ## Feature Flags
 
-- `std`: Enables `std` and `alloc` support
+- `std`: Enables `std` and `alloc` support.
 
-- `alloc`: Enables `alloc` support, allowing usage of some dynamically allocated queues
+- `alloc`: Enables `alloc` support, allowing usage of some dynamically allocated queues.
 
-- `pool`: Enables pooled queues, which may store any type
+- `pool`: Enables pooled queues, which may store any type.
 
-- `dynamic`: Enables dynamic queues, which may be dynamically resized
+- `dynamic`: Enables dynamic queues, which may be dynamically resized. Depends on `alloc`.
 
-- `atomic-fallback`: Uses `portable-atomic` `fallback` feature for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks
+- `atomic-fallback`: Uses `portable-atomic` `fallback` feature for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks.
 
 - `default`: `pool`
 
@@ -139,9 +165,9 @@ The core test-suite of this crate was adapted from [`crossbeam-queue`](https://g
 
 Current testing is based on:
 
-- **Miri** - to validate pointer arithmetic and catch UB
-- **Loom and Shuttle** - to test for race conditions
-- **ASan** - to check for memory corruption and leakage
+- **Miri** - to validate pointer arithmetic and catch UB.
+- **Loom and Shuttle** - to test for race conditions.
+- **ASan** - to check for memory corruption.
 
 
 ## References
