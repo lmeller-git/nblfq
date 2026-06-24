@@ -41,16 +41,16 @@ atomic-fallback = ["portable-atomic/fallback"]
 
 [dependencies]
 crossbeam-utils = { version = "0.8.21", default-features = false }
-portable-atomic = { version = "1.11.1", default-features = false, features = ["require-cas"] }
+portable-atomic = { version = "1.13.1", default-features = false, features = ["require-cas"] }
 
 [dev-dependencies]
-criterion = { version = "0.8.1", features = ["html_reports"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.7"
 
 [target.'cfg(shuttle)'.dependencies]
-shuttle = "0.8.1"
+shuttle = "0.9.1"
 
 [target.'cfg(bench_crossbeam)'.dev-dependencies]
 crossbeam-queue = "0.3.12"
