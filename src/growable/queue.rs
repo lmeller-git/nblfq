@@ -221,9 +221,12 @@ where
                         Ordering::AcqRel,
                         Ordering::Relaxed,
                     );
+
+                    continue;
                 }
 
-                continue;
+                // at this point the old queue did not contain any items, even though items are in-flight. We can move on to the new queue and attempt to pop from that queue.
+                // This does not break linearizability because the push operation to the old queue was overlapping with the push operation to the new queue.
             }
 
             if !self.register_reader(push_epoch) {

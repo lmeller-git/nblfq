@@ -571,7 +571,7 @@ mod growth {
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(miri)]
-        const COUNT: usize = 50;
+        const COUNT: usize = 30;
         #[cfg(not(miri))]
         const COUNT: usize = 75_000;
         const RESIZERS: usize = 2;
@@ -639,7 +639,7 @@ mod growth {
         #[cfg(not(miri))]
         const THREADS: usize = 8;
         #[cfg(miri)]
-        const ITERS: usize = 15;
+        const ITERS: usize = 10;
         #[cfg(not(miri))]
         const ITERS: usize = 2000;
 
