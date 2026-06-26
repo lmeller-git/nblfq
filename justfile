@@ -9,6 +9,7 @@ test-rs:
     cargo +nightly miri test --locked --all-features
     LOOM_MAX_PREEMPTIONS=2 RUSTFLAGS="--cfg loom" cargo test --locked --lib --features dynamic
     RUSTFLAGS="--cfg shuttle" cargo test --locked --lib --features dynamic
+    RUSTFLAGS="--cfg echeneis" cargo test --locked --lib --features dynamic
 
 lint-rs:
     cargo +nightly fmt --all -- --check

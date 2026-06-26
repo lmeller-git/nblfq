@@ -283,6 +283,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "echeneis"
+version = "0.1.0"
+source = "git+https://github.com/lmeller-git/echeneis#e46e84de304cf705b2fc98f4c18b93e70d228e40"
+dependencies = [
+ "loom",
+ "portable-atomic",
+ "shuttle",
+]
+
+[[package]]
 name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -491,6 +501,7 @@ dependencies = [
  "criterion",
  "crossbeam-queue",
  "crossbeam-utils",
+ "echeneis",
  "loom",
  "portable-atomic",
  "shuttle",

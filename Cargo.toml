@@ -52,6 +52,9 @@ loom = "0.7"
 [target.'cfg(shuttle)'.dependencies]
 shuttle = "0.9.1"
 
+[target.'cfg(echeneis)'.dependencies]
+echeneis = { git = "https://github.com/lmeller-git/echeneis", features = ["portable-atomics", "atomic-fallback"] }
+
 [target.'cfg(bench_crossbeam)'.dev-dependencies]
 crossbeam-queue = "0.3.12"
 
@@ -63,7 +66,7 @@ name = "queue_benchmarks"
 harness = false
 
 [workspace.lints.rust]
-unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)', 'cfg(bench_crossbeam)'] }
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(loom)', 'cfg(shuttle)', 'cfg(bench_crossbeam)', 'cfg(echeneis)'] }
 rust_2018_idioms = { level = "warn", priority = -1 }
 unnameable_types = "warn"
 unreachable_pub = "warn"
