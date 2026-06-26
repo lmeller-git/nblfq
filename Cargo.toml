@@ -53,7 +53,7 @@ loom = "0.7"
 shuttle = "0.9.1"
 
 [target.'cfg(echeneis)'.dependencies]
-echeneis = { git = "https://github.com/lmeller-git/echeneis", features = ["portable-atomics", "atomic-fallback"] }
+echeneis = { version = "0.1.1", features = ["portable-atomic", "atomic-fallback"] }
 
 [target.'cfg(bench_crossbeam)'.dev-dependencies]
 crossbeam-queue = "0.3.12"

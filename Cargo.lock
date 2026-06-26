@@ -284,8 +284,9 @@ dependencies = [
 
 [[package]]
 name = "echeneis"
-version = "0.1.0"
-source = "git+https://github.com/lmeller-git/echeneis#e46e84de304cf705b2fc98f4c18b93e70d228e40"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8b9ac239d2c981c958e6541c0a62abdbd225550dbbfbdfc66f5cb819a73f430"
 dependencies = [
  "loom",
  "portable-atomic",
