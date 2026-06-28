@@ -124,10 +124,12 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 
 > [!NOTE]
 > **ABA Safety & Storage Selection**
+>
 > If it is plausible that other threads could perform `(2^15 - 1) * queue_size`
 > pop and push operations while a single thread is paused/preempted in pop/push, `Tagged128` slots should be used to ensure ABA safety.
 >
 > **Tagged64 Safety**
+>
 > Sending ptr-types via `Tagged64` slots is not safe if more than 48 bits are used for pointers.
 > This is currently enforced with a runtime check, however some unsafe usages may be missed by this check.
 
@@ -142,6 +144,8 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 - `dynamic`: Enables dynamic queues, which may be dynamically resized. Depends on `alloc`.
 
 - `atomic-fallback`: Uses `portable-atomic` `fallback` feature for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks.
+
+- `unsafe-ptr48`: implements AsPackedValue for pointers on `x86-64` and `aarch64`. This feature is safe to use if 48 or less bits are used for pointers on the target platform.
 
 - `default`: `pool`
 
