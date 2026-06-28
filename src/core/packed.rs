@@ -181,6 +181,7 @@ mod bit64 {
             let bit_47 = (addr >> 47) & 1;
 
             if !(bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF) {
+                #[cfg(feature = "std")]
                 eprintln!(
                     "Pointer {ptr:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits."
                 );
