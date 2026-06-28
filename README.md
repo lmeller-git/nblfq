@@ -96,11 +96,15 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 ## Choosing a queue type
 
-`StaticQueue` and `Queue` may only store small values and are optimized for this use case.
+Do you have an allocator? -> Use a non-static Queue.
+Do you want to send large owned items? -> Use `Pooled*`.
+Do you want to resize your queue? -> Use `Dynamic*`.
 
-`PooledStaticQueue` and `PooledQueue` may store arbitrary types, at the cost of higher memory usage and runtime cost.
+- `StaticQueue` and `Queue`: may only store small values and are optimized for this use case.
 
-`DynamicQueue` and `PooledDynamicQueue` may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
+- `PooledStaticQueue` and `PooledQueue`: may store arbitrary types, at the cost of higher memory usage and runtime cost.
+
+- `DynamicQueue` and `PooledDynamicQueue`: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
 
 ## Platform Support
 
@@ -116,6 +120,10 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 > **ABA Safety & Storage Selection**
 > If it is plausible that other threads could perform `(2^15 - 1) * queue_size`
 > pop and push operations while a single thread is paused/preempted in pop/push, `Tagged128` slots should be used to ensure ABA safety.
+>
+> **Tagged64 Safety**
+> Sending ptr-types via `Tagged64` slots is not safe if more than 48 bits are used for pointers.
+> This is currently enforced with a runtime check, however some unsafe usages may be missed by this check.
 
 ## Feature Flags
 
@@ -167,6 +175,7 @@ Current testing is based on:
 
 - **Miri** - to validate pointer arithmetic and catch UB.
 - **Loom and Shuttle** - to test for race conditions.
+- **Echeneis** - to check basic non-blocking behaviour.
 - **ASan** - to check for memory corruption.
 
 

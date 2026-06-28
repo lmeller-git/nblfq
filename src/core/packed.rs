@@ -171,16 +171,17 @@ mod bit64 {
     use super::*;
 
     fn assert_ptr_safety() {
-        let dummy = 42;
-        let raw = &dummy as *const i32;
-        let addr = raw as u64;
-        let top_16 = addr >> 48;
-        let bit_47 = (addr >> 47) & 1;
+        let stack_dummy = 0u8;
+        for ptr in [&stack_dummy as *const u8, core::ptr::dangling()] {
+            let addr = ptr as usize;
+            let top_16 = addr >> 48;
+            let bit_47 = (addr >> 47) & 1;
 
-        assert!(
-            (bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF),
-            "Pointer {raw:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits.",
-        );
+            assert!(
+                (bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF),
+                "Pointer {ptr:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits.",
+            );
+        }
     }
 
     // Safety:

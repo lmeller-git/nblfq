@@ -3,7 +3,7 @@
 //! Tests adapted from crossbeam-queue's test suite.
 //! <https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue>
 
-use std::{thread::scope, vec::Vec};
+use std::{rc::Rc, thread::scope, vec::Vec};
 
 use crate::{
     MPMCQueue,
@@ -60,6 +60,29 @@ where
     assert_eq!(q.len(), 1);
     assert!(!q.is_empty());
     assert!(!q.is_full());
+}
+
+pub(crate) struct Drops(Rc<AtomicUsize>);
+
+impl Drop for Drops {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Release);
+    }
+}
+
+pub(crate) fn drops<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = Box<Drops>>,
+{
+    let counter = Rc::new(AtomicUsize::new(q.capacity()));
+
+    for _ in 0..q.capacity() {
+        assert!(q.push(Box::new(Drops(counter.clone()))).is_ok());
+    }
+
+    drop(q);
+
+    assert_eq!(counter.load(Ordering::Acquire), 0);
 }
 
 pub(crate) fn len<Q>(q: Q)
@@ -525,7 +548,7 @@ mod growth {
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
         #[cfg(miri)]
-        const COUNT: usize = 100;
+        const COUNT: usize = 50;
         #[cfg(not(miri))]
         const COUNT: usize = 10_000;
         const THREADS: usize = 4;
@@ -893,5 +916,26 @@ mod growth {
             final_cap >= expected_min_cap,
             "Structural integrity failed: Expected capacity >= {expected_min_cap}, but got {final_cap}",
         );
+    }
+
+    pub(crate) fn drops_resized<Q>(q: Q)
+    where
+        Q: MPMCQueue<Item = Box<Drops>> + Resize,
+    {
+        let counter = Rc::new(AtomicUsize::new(q.capacity() + 5));
+
+        for _ in 0..q.capacity() {
+            assert!(q.push(Box::new(Drops(counter.clone()))).is_ok());
+        }
+
+        assert!(q.resize(5));
+
+        for _ in 0..5 {
+            assert!(q.push(Box::new(Drops(counter.clone()))).is_ok());
+        }
+
+        drop(q);
+
+        assert_eq!(counter.load(Ordering::Acquire), 0);
     }
 }

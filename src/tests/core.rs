@@ -1,5 +1,6 @@
 use crate::tests::test_library::{
     MaliciousCargo,
+    drops,
     force_push,
     len,
     len_empty_full,
@@ -35,6 +36,12 @@ cfg_atomic_tagged64! {
         fn len_empty_full_impl() {
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(2));
             len_empty_full(q);
+        }
+
+        #[test]
+        fn drops_impl() {
+            let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(2));
+            drops(q);
         }
 
         #[test]
@@ -124,6 +131,12 @@ cfg_atomic_tagged128! {
         }
 
         #[test]
+        fn drops_impl() {
+            let q: QueueCore<BoxedBuffer<Tagged128<_>>> = QueueCore::new_in(BoxedBuffer::new(2));
+            drops(q);
+        }
+
+        #[test]
         fn len_impl() {
             #[cfg(miri)]
             const CAP: usize = 40;
@@ -205,6 +218,12 @@ mod pool {
     fn len_empty_full_impl() {
         let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
         len_empty_full(q);
+    }
+
+    #[test]
+    fn drops_impl() {
+        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
+        drops(q);
     }
 
     #[test]
@@ -386,6 +405,7 @@ mod growable {
     use crate::{
         DynamicQueue,
         tests::test_library::{
+            drops_resized,
             grow_storm,
             len_grow,
             mpmc_resize,
@@ -419,6 +439,18 @@ mod growable {
     fn len_empty_full_impl() {
         let q: DynamicQueue<_> = DynamicQueue::new(2);
         len_empty_full(q);
+    }
+
+    #[test]
+    fn drops_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(2);
+        drops(q);
+    }
+
+    #[test]
+    fn drops_resized_impl() {
+        let q: DynamicQueue<_> = DynamicQueue::new(2);
+        drops_resized(q);
     }
 
     #[test]
@@ -552,6 +584,18 @@ mod growable {
         fn smoke_long_impl() {
             let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(10);
             smoke_long(q);
+        }
+
+        #[test]
+        fn drops_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            drops(q);
+        }
+
+        #[test]
+        fn drops_resized_impl() {
+            let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
+            drops_resized(q);
         }
 
         #[test]
