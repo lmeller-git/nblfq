@@ -847,7 +847,10 @@ mod growth {
 
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
+                    let mut backoff = crate::utils::Backoff::new();
+                    while q.push(i as u32).is_err() {
+                        backoff.backoff();
+                    }
                     let _len = q.len();
                 }
             });
@@ -860,7 +863,7 @@ mod growth {
 
                 let mut backoff = crate::utils::Backoff::new();
                 for _ in 0..GROW_ITERS {
-                    let _ = q.resize(CAP / 2 + q.capacity());
+                    _ = q.resize(CAP / 2 + q.capacity());
                     backoff.backoff();
                 }
             });
@@ -899,21 +902,21 @@ mod growth {
                     );
                     last_cap = current_cap;
 
-                    let _ = q.is_full();
+                    _ = q.is_full();
                 }
             });
 
             scope.spawn(|| {
                 for _ in 0..ITERS {
-                    let _len = q.len();
-                    let _empty = q.is_empty();
+                    _ = q.len();
+                    _ = q.is_empty();
                 }
             });
 
             scope.spawn(|| {
                 for i in 0..ITERS {
-                    let _ = q.push(i as u32);
-                    let _ = q.pop();
+                    _ = q.push(i as u32);
+                    _ = q.pop();
                 }
             });
 

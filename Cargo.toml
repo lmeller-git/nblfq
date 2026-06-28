@@ -30,6 +30,7 @@ license = "MIT"
 repository = "https://github.com/lmeller-git/nblf-queue"
 keywords = ["queue", "mpmc", "no_std", "atomic", "lock-free"]
 categories = ["data-structures", "algorithms", "concurrency", "no-std"]
+rust-version = "1.85.0"
 
 [features]
 default = ["pool"]

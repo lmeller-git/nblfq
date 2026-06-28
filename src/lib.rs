@@ -181,9 +181,9 @@ pub trait MPMCQueue {
 
 /// An extension trait for `MPMCQueue` that allows dynamic resizing of the queue.
 ///
-/// This trait makes **no** guarantees regarding the synchronization model or
-/// blocking behavior of the `resize` method itself. It only guarantees that
-/// the core `MPMCQueue` operations maintain their original guarantees.
+/// This trait makes **no** guarantees regarding the blocking behavior of the `resize` method itself.
+/// It only guarantees that the core `MPMCQueue` operations maintain their original guarantees
+/// and that the resize operation is atomically published to other threads.
 ///
 /// # Examples
 ///
@@ -219,7 +219,7 @@ pub trait Resize: MPMCQueue {
     /// Attempts to resize the capacity of the queue to `size` slots.
     ///
     /// **Note:** This method may block or fail spuriously.
-    /// Further a growth event may not be considered finished until some time after the call to `resize`.
+    /// Further a growth event may not be considered finished in regards of an other `resize` being possible until some time after the call to `resize`.
     ///
     /// Returns `true` if the resize was successfull, or `false` if
     /// it failed. Failure can occur due to allocator exhaustion, thread
