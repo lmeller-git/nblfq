@@ -29,10 +29,10 @@ use nblf_queue::{MPMCQueue, StaticQueue};
 mod crossbeam_ {
     use super::*;
 
-    pub struct CrossbeamWrapper<T>(ArrayQueue<T>);
+    pub(crate) struct CrossbeamWrapper<T>(ArrayQueue<T>);
 
     impl<T> CrossbeamWrapper<T> {
-        pub fn new(size: usize) -> Self {
+        pub(crate) fn new(size: usize) -> Self {
             Self(ArrayQueue::new(size))
         }
     }
@@ -58,16 +58,16 @@ mod crossbeam_ {
     }
 
     #[cfg(feature = "dynamic")]
-    pub use dynamic::*;
+    pub(crate) use dynamic::*;
 
     #[cfg(feature = "dynamic")]
     mod dynamic {
         use super::*;
 
-        pub struct SegQueueWrapper<T>(SegQueue<T>);
+        pub(crate) struct SegQueueWrapper<T>(SegQueue<T>);
 
         impl<T> SegQueueWrapper<T> {
-            pub fn new() -> Self {
+            pub(crate) fn new() -> Self {
                 Self(SegQueue::new())
             }
         }
@@ -102,7 +102,7 @@ mod crossbeam_ {
         }
 
         impl<T> Resize for SegQueueWrapper<T> {
-            fn grow_by(&self, _by: usize) -> bool {
+            fn resize(&self, _cap: usize) -> bool {
                 true
             }
         }
