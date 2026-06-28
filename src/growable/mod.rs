@@ -16,6 +16,7 @@ impl<T> NewSized for BoxedBuffer<T>
 where
     T: Default,
 {
+    #[track_caller]
     fn with_size(size: usize) -> Self {
         Self::new(size)
     }

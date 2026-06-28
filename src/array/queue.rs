@@ -30,12 +30,14 @@ where
 {
     /// Constructs a new `StaticQueue` with slot type `Auto`.
     /// `T` must fit into the chosen slot type
+    #[track_caller]
     pub fn new() -> Self {
         Self::with_slot::<Auto>()
     }
 
     /// Constructs a new `StaticQueue` with slot type `S`.
     /// `T` must fit into the slot type `S`
+    #[track_caller]
     pub fn with_slot<S>() -> StaticQueue<T, N, S>
     where
         S: SlotType<T>,
@@ -74,6 +76,7 @@ impl<T, const N: usize> Default for StaticQueue<T, N, Auto>
 where
     T: AsPackedValue,
 {
+    #[track_caller]
     fn default() -> Self {
         Self::new()
     }
@@ -106,11 +109,13 @@ mod pooled_static {
     #[allow(private_bounds)]
     impl<T, const N: usize> PooledStaticQueue<T, N, Auto> {
         /// Constructs a new `PooledStaticQueue` with slot type `Auto`
+        #[track_caller]
         pub fn new() -> Self {
             Self::with_slot::<Auto>()
         }
 
         /// Constructs a new `PooledStaticQueue` with slot type `S`
+        #[track_caller]
         pub fn with_slot<S>() -> PooledStaticQueue<T, N, S>
         where
             S: SlotType<ItemHandle<T>>,
@@ -149,6 +154,7 @@ mod pooled_static {
     }
 
     impl<T, const N: usize> Default for PooledStaticQueue<T, N, Auto> {
+        #[track_caller]
         fn default() -> Self {
             Self::new()
         }

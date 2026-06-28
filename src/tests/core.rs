@@ -1,24 +1,30 @@
 use crate::tests::test_library::{
     MaliciousCargo,
-    drops,
     force_push,
     len,
     len_empty_full,
     linearizable,
     mpmc,
-    mpmc_ring_buf_ptr,
     mpmc_ring_buffer,
     mpsc,
     smoke,
     smoke_long,
     spsc,
 };
+#[cfg(any(
+    all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+    all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+    not(target_pointer_width = "64")
+))]
+use crate::tests::test_library::{drops, mpmc_ring_buf_ptr};
 
 cfg_atomic_tagged64! {
     mod tagged_ptr64 {
-        use crate::{owned::buffer::BoxedBuffer, core::{queue::QueueCore, slot::Tagged64}};
-
         use super::*;
+        use crate::{
+            core::{queue::QueueCore, slot::Tagged64},
+            owned::buffer::BoxedBuffer,
+        };
 
         #[test]
         fn smoke_impl() {
@@ -38,6 +44,11 @@ cfg_atomic_tagged64! {
             len_empty_full(q);
         }
 
+        #[cfg(any(
+            all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+            all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+            not(target_pointer_width = "64")
+        ))]
         #[test]
         fn drops_impl() {
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(2));
@@ -85,7 +96,11 @@ cfg_atomic_tagged64! {
             linearizable(q);
         }
 
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64", not(target_pointer_width = "64")))]
+        #[cfg(any(
+            all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+            all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+            not(target_pointer_width = "64")
+        ))]
         #[test]
         fn mpmc_ring_buf_ptr_impl() {
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(4));
@@ -101,7 +116,8 @@ cfg_atomic_tagged64! {
         #[test]
         #[should_panic]
         fn malicious_cargo_impl() {
-            let _q: QueueCore<BoxedBuffer<Tagged64<MaliciousCargo>>> = QueueCore::new_in(BoxedBuffer::new(4));
+            let _q: QueueCore<BoxedBuffer<Tagged64<MaliciousCargo>>> =
+                QueueCore::new_in(BoxedBuffer::new(4));
         }
     }
 }
@@ -220,6 +236,11 @@ mod pool {
         len_empty_full(q);
     }
 
+    #[cfg(any(
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+        not(target_pointer_width = "64")
+    ))]
     #[test]
     fn drops_impl() {
         let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
@@ -402,10 +423,15 @@ mod owned {
 #[cfg(feature = "dynamic")]
 mod growable {
     use super::*;
+    #[cfg(any(
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+        not(target_pointer_width = "64")
+    ))]
+    use crate::tests::test_library::drops_resized;
     use crate::{
         DynamicQueue,
         tests::test_library::{
-            drops_resized,
             grow_storm,
             len_grow,
             mpmc_resize,
@@ -441,12 +467,22 @@ mod growable {
         len_empty_full(q);
     }
 
+    #[cfg(any(
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+        not(target_pointer_width = "64")
+    ))]
     #[test]
     fn drops_impl() {
         let q: DynamicQueue<_> = DynamicQueue::new(2);
         drops(q);
     }
 
+    #[cfg(any(
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+        not(target_pointer_width = "64")
+    ))]
     #[test]
     fn drops_resized_impl() {
         let q: DynamicQueue<_> = DynamicQueue::new(2);
@@ -495,8 +531,8 @@ mod growable {
     }
 
     #[cfg(any(
-        target_arch = "x86_64",
-        target_arch = "aarch64",
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
         not(target_pointer_width = "64")
     ))]
     #[test]
@@ -586,12 +622,22 @@ mod growable {
             smoke_long(q);
         }
 
+        #[cfg(any(
+            all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+            all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+            not(target_pointer_width = "64")
+        ))]
         #[test]
         fn drops_impl() {
             let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);
             drops(q);
         }
 
+        #[cfg(any(
+            all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+            all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+            not(target_pointer_width = "64")
+        ))]
         #[test]
         fn drops_resized_impl() {
             let q: PooledDynamicQueue<_> = PooledDynamicQueue::new(2);

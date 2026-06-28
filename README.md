@@ -31,17 +31,23 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 `nblf_queue::StaticQueue`:
 
 ```rust
-  use nblf_queue::{StaticQueue, MPMCQueue};
+  #[cfg(feature = "unsafe-ptr48")]
+  fn run() {
+    use nblf_queue::{StaticQueue, MPMCQueue};
 
-  let q: StaticQueue<_, 2> = StaticQueue::new();
+    let q: StaticQueue<_, 2> = StaticQueue::new();
 
-  assert!(q.push(&42).is_ok());
-  assert!(q.push(&1).is_ok());
-  assert!(q.push(&4242).is_err());
+    assert!(q.push(&42).is_ok());
+    assert!(q.push(&1).is_ok());
+    assert!(q.push(&4242).is_err());
 
-  assert_eq!(q.pop(), Some(&42));
-  assert_eq!(q.pop(), Some(&1));
-  assert!(q.pop().is_none());
+    assert_eq!(q.pop(), Some(&42));
+    assert_eq!(q.pop(), Some(&1));
+    assert!(q.pop().is_none());
+  }
+
+  #[cfg(feature = "unsafe-ptr48")]
+  run();
 ```
 
 

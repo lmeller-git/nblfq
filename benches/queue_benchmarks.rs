@@ -115,17 +115,17 @@ const ITER_PER_THREAD: u64 = TOTAL_ITEMS / N_PRODUCER;
 
 fn run_queue_single_thread<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static i32>,
+    Q: MPMCQueue<Item = i32>,
 {
     for _ in 0..TOTAL_ITEMS {
-        q.push(black_box(&0)).unwrap();
+        q.push(black_box(0)).unwrap();
         black_box(q.pop()).unwrap();
     }
 }
 
 fn run_queue_mpsc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static usize> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
 
@@ -133,7 +133,7 @@ where
         for _ in 0..N_PRODUCER {
             scope.spawn(|| {
                 for _ in 0..ITER_PER_THREAD {
-                    while q.push(black_box(&1)).is_err() {
+                    while q.push(black_box(1)).is_err() {
                         spin_loop();
                     }
                 }
@@ -154,7 +154,7 @@ where
 
 fn run_queue_mpmc<Q>(q: Q)
 where
-    Q: MPMCQueue<Item = &'static usize> + Sync,
+    Q: MPMCQueue<Item = u32> + Sync,
 {
     assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
 
@@ -164,7 +164,7 @@ where
         for _ in 0..N_PRODUCER {
             scope.spawn(|| {
                 for _ in 0..ITER_PER_THREAD {
-                    while q.push(black_box(&1)).is_err() {
+                    while q.push(black_box(1)).is_err() {
                         spin_loop();
                     }
                 }
@@ -190,12 +190,12 @@ where
 
 fn simple_sender<Q>(q: Q, values: &[&'static u8])
 where
-    Q: MPMCQueue<Item = &'static u8> + Sync,
+    Q: MPMCQueue<Item = u8> + Sync,
 {
     thread::scope(|scope| {
         scope.spawn(|| {
             for v in values.iter() {
-                while q.push(v).is_err() {}
+                while q.push(**v).is_err() {}
             }
         });
 
@@ -217,7 +217,7 @@ mod dynamic {
 
     pub(crate) fn run_queue_mpsc_growing<Q>(q: Q, grow_step: usize)
     where
-        Q: MPMCQueue<Item = &'static usize> + Sync + Resize,
+        Q: MPMCQueue<Item = u32> + Sync + Resize,
     {
         assert_eq!(TOTAL_ITEMS % N_PRODUCER, 0);
 
@@ -225,7 +225,7 @@ mod dynamic {
             for _ in 0..N_PRODUCER {
                 scope.spawn(|| {
                     for _ in 0..ITER_PER_THREAD {
-                        while q.push(black_box(&1)).is_err() {
+                        while q.push(black_box(1)).is_err() {
                             _ = q.resize(grow_step);
                             spin_loop();
                         }

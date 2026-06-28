@@ -7,6 +7,7 @@ pub(crate) struct BoxedBuffer<S> {
 }
 
 impl<S: Default> BoxedBuffer<S> {
+    #[track_caller]
     pub(crate) fn new(size: usize) -> Self {
         Self {
             inner: (0..size).map(|_| S::default()).collect(),

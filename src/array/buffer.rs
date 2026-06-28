@@ -7,6 +7,7 @@ pub(crate) struct ArrayBuf<const N: usize, S> {
 }
 
 impl<const N: usize, S: Default> ArrayBuf<N, S> {
+    #[track_caller]
     pub(crate) fn new() -> Self {
         Self {
             inner: array::from_fn(|_| S::default()),

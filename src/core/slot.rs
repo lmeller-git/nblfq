@@ -90,6 +90,7 @@ cfg_atomic_tagged64! {
             const EMPTY_VALUE: Self::Storage = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
+            #[track_caller]
             fn new() -> Self {
                 const {
                     assert!(
@@ -212,6 +213,7 @@ cfg_atomic_tagged128! {
             const EMPTY_VALUE: Self::Storage = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 
+            #[track_caller]
             fn new() -> Self {
                 const {
                     assert!(

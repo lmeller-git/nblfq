@@ -25,6 +25,7 @@ pub(crate) struct QueueCore<B: Buffer> {
 }
 
 impl<B: Buffer> QueueCore<B> {
+    #[track_caller]
     pub(crate) fn new_in(buffer: B) -> Self {
         Self {
             buffer,

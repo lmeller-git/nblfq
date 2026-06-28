@@ -164,24 +164,30 @@ unsafe impl AsPackedValue for () {
 
 // TODO for targets with ptr width <=48 bits, we could also atomic_encode_primitive ptrs + usize
 
-/// Some `x86_64` and aarch64 based hardware has support for level 5 pagetables / use more than 48 bits for pointers. These implementations are not safe on hardware using more that 48 bits for pointers.
-/// This invariant will be checked at runtime.
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+/// Some `x86_64` and `aarch64` based hardware has support for level 5 pagetables / use more than 48 bits for pointers. These implementations are not safe on hardware using more that 48 bits for pointers.
+/// This invariant will be checked at runtime. Since the runtime check may miss some cases, this needs to (unsafely) be manually enabled
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    feature = "unsafe-ptr48"
+))]
 mod bit64 {
     use super::*;
 
-    fn assert_ptr_safety() {
+    fn assert_ptr_safety() -> bool {
         let stack_dummy = 0u8;
         for ptr in [&stack_dummy as *const u8, core::ptr::dangling()] {
             let addr = ptr as usize;
             let top_16 = addr >> 48;
             let bit_47 = (addr >> 47) & 1;
 
-            assert!(
-                (bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF),
-                "Pointer {ptr:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits.",
-            );
+            if !(bit_47 == 0 && top_16 == 0) || (bit_47 == 1 && top_16 == 0xFFFF) {
+                eprintln!(
+                    "Pointer {ptr:p} exceeds 48-bit address space! AsPackedValue is unsafe here. Consider using a PooledQueue, a Tagged128 Slot or a custom ptrlike value encodeable in <= 48bits."
+                );
+                return false;
+            }
         }
+        true
     }
 
     // Safety:
@@ -203,8 +209,7 @@ mod bit64 {
         }
 
         fn is_rt_safe() -> bool {
-            assert_ptr_safety();
-            true
+            assert_ptr_safety()
         }
     }
 
@@ -227,8 +232,7 @@ mod bit64 {
         }
 
         fn is_rt_safe() -> bool {
-            assert_ptr_safety();
-            true
+            assert_ptr_safety()
         }
     }
 
@@ -252,8 +256,7 @@ mod bit64 {
         }
 
         fn is_rt_safe() -> bool {
-            assert_ptr_safety();
-            true
+            assert_ptr_safety()
         }
     }
 
@@ -275,8 +278,7 @@ mod bit64 {
         }
 
         fn is_rt_safe() -> bool {
-            assert_ptr_safety();
-            true
+            assert_ptr_safety()
         }
     }
 
@@ -298,8 +300,7 @@ mod bit64 {
         }
 
         fn is_rt_safe() -> bool {
-            assert_ptr_safety();
-            true
+            assert_ptr_safety()
         }
     }
 
@@ -332,8 +333,7 @@ mod bit64 {
             }
 
             fn is_rt_safe() -> bool {
-                assert_ptr_safety();
-                true
+                assert_ptr_safety()
             }
         }
 
@@ -356,8 +356,7 @@ mod bit64 {
             }
 
             fn is_rt_safe() -> bool {
-                assert_ptr_safety();
-                true
+                assert_ptr_safety()
             }
         }
 
@@ -380,8 +379,7 @@ mod bit64 {
             }
 
             fn is_rt_safe() -> bool {
-                assert_ptr_safety();
-                true
+                assert_ptr_safety()
             }
         }
 
@@ -404,8 +402,7 @@ mod bit64 {
             }
 
             fn is_rt_safe() -> bool {
-                assert_ptr_safety();
-                true
+                assert_ptr_safety()
             }
         }
 
@@ -428,18 +425,21 @@ mod bit64 {
             }
 
             fn is_rt_safe() -> bool {
-                assert_ptr_safety();
-                true
+                assert_ptr_safety()
             }
         }
     }
 }
 
 /// Cannot guarantee that all 64 bit architectures use 48bit pointers.
-#[cfg(all(
-    not(target_arch = "x86_64"),
-    not(target_arch = "aarch64"),
-    target_pointer_width = "64"
+#[cfg(any(
+    all(target_arch = "x86_64", not(feature = "unsafe-ptr48")),
+    all(target_arch = "aarch64", not(feature = "unsafe-ptr48")),
+    all(
+        not(target_arch = "x86_64"),
+        not(target_arch = "aarch64"),
+        target_pointer_width = "64"
+    )
 ))]
 mod full_bit64 {
     use super::*;

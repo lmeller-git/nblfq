@@ -3,7 +3,7 @@
 //! Tests adapted from crossbeam-queue's test suite.
 //! <https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue>
 
-use std::{rc::Rc, thread::scope, vec::Vec};
+use std::{thread::scope, vec::Vec};
 
 use crate::{
     MPMCQueue,
@@ -62,19 +62,34 @@ where
     assert!(!q.is_full());
 }
 
-pub(crate) struct Drops(Rc<AtomicUsize>);
+#[cfg(any(
+    all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+    all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+    not(target_pointer_width = "64")
+))]
+pub(crate) struct Drops(std::rc::Rc<AtomicUsize>);
 
+#[cfg(any(
+    all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+    all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+    not(target_pointer_width = "64")
+))]
 impl Drop for Drops {
     fn drop(&mut self) {
         self.0.fetch_sub(1, Ordering::Release);
     }
 }
 
+#[cfg(any(
+    all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+    all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+    not(target_pointer_width = "64")
+))]
 pub(crate) fn drops<Q>(q: Q)
 where
     Q: MPMCQueue<Item = Box<Drops>>,
 {
-    let counter = Rc::new(AtomicUsize::new(q.capacity()));
+    let counter = std::rc::Rc::new(AtomicUsize::new(q.capacity()));
 
     for _ in 0..q.capacity() {
         assert!(q.push(Box::new(Drops(counter.clone()))).is_ok());
@@ -373,6 +388,11 @@ where
     });
 }
 
+#[cfg(any(
+    all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+    all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+    not(target_pointer_width = "64")
+))]
 pub(crate) fn mpmc_ring_buf_ptr<Q>(q: Q)
 where
     Q: MPMCQueue<Item = Box<usize>> + Sync,
@@ -918,11 +938,16 @@ mod growth {
         );
     }
 
+    #[cfg(any(
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+        not(target_pointer_width = "64")
+    ))]
     pub(crate) fn drops_resized<Q>(q: Q)
     where
         Q: MPMCQueue<Item = Box<Drops>> + Resize,
     {
-        let counter = Rc::new(AtomicUsize::new(q.capacity() + 5));
+        let counter = std::rc::Rc::new(AtomicUsize::new(q.capacity() + 5));
 
         for _ in 0..q.capacity() {
             assert!(q.push(Box::new(Drops(counter.clone()))).is_ok());

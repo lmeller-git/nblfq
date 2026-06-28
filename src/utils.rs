@@ -115,6 +115,7 @@ pub(crate) fn sign_erase(ptr: u64) -> u64 {
     ptr & ((1u64 << 48) - 1)
 }
 
+#[allow(unused)]
 pub(crate) fn sign_extend(ptr: u64) -> u64 {
     if ptr & (1u64 << 47) != 0 {
         ptr | (!((1u64 << 48) - 1))

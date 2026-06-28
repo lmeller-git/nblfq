@@ -47,17 +47,17 @@ pub use owned::Queue;
 ///
 /// let q: StaticQueue<_, 2> = StaticQueue::new();
 ///
-/// assert!(q.push(&42).is_ok());
-/// assert!(q.push(&2).is_ok());
+/// assert!(q.push(42).is_ok());
+/// assert!(q.push(2).is_ok());
 ///
 /// assert_eq!(q.len(), 2);
 /// assert!(q.is_full());
 ///
-/// assert_eq!(q.force_push(&0), Some(&42));
+/// assert_eq!(q.force_push(0), Some(42));
 /// assert!(q.is_full());
 ///
-/// assert_eq!(q.pop(), Some(&2));
-/// assert_eq!(q.pop(), Some(&0));
+/// assert_eq!(q.pop(), Some(2));
+/// assert_eq!(q.pop(), Some(0));
 /// assert_eq!(q.len(), 0);
 /// assert!(q.is_empty());
 /// ```
@@ -75,10 +75,10 @@ pub trait MPMCQueue {
     ///
     /// let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
-    /// assert!(q.push(&10).is_ok());
-    /// assert!(q.push(&20).is_ok());
-    /// assert_eq!(q.push(&30), Err(&30));
-    /// assert_eq!(q.pop(), Some(&10));
+    /// assert!(q.push(10).is_ok());
+    /// assert!(q.push(20).is_ok());
+    /// assert_eq!(q.push(30), Err(30));
+    /// assert_eq!(q.pop(), Some(10));
     /// ```
     fn push(&self, item: Self::Item) -> Result<(), Self::Item>;
     /// Attempts to pop an item from the queue.
@@ -91,10 +91,10 @@ pub trait MPMCQueue {
     ///
     /// let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
-    /// assert!(q.push(&10).is_ok());
-    /// assert!(q.push(&42).is_ok());
-    /// assert_eq!(q.pop(), Some(&10));
-    /// assert_eq!(q.pop(), Some(&42));
+    /// assert!(q.push(10).is_ok());
+    /// assert!(q.push(42).is_ok());
+    /// assert_eq!(q.pop(), Some(10));
+    /// assert_eq!(q.pop(), Some(42));
     /// assert!(q.pop().is_none());
     /// ```
     fn pop(&self) -> Option<Self::Item>;
@@ -130,10 +130,10 @@ pub trait MPMCQueue {
     ///
     /// let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
-    /// assert!(q.force_push(&10).is_none());
-    /// assert!(q.force_push(&20).is_none());
-    /// assert_eq!(q.force_push(&30), Some(&10));
-    /// assert_eq!(q.pop(), Some(&20));
+    /// assert!(q.force_push(10).is_none());
+    /// assert!(q.force_push(20).is_none());
+    /// assert_eq!(q.force_push(30), Some(10));
+    /// assert_eq!(q.pop(), Some(20));
     /// ```
     fn force_push(&self, item: Self::Item) -> Option<Self::Item> {
         let mut item_container = None;
@@ -157,12 +157,12 @@ pub trait MPMCQueue {
     ///
     /// let q: StaticQueue<_, 2> = StaticQueue::new();
     ///
-    /// q.force_push_and_do(&10, |item| {});
-    /// q.force_push_and_do(&20, |item| {});
-    /// q.force_push_and_do(&30, |item| {
-    ///     assert_eq!(item, &10)
+    /// q.force_push_and_do(10, |item| {});
+    /// q.force_push_and_do(20, |item| {});
+    /// q.force_push_and_do(30, |item| {
+    ///     assert_eq!(item, 10)
     /// });
-    /// assert_eq!(q.pop(), Some(&20));
+    /// assert_eq!(q.pop(), Some(20));
     /// ```
     fn force_push_and_do<F>(&self, mut item: Self::Item, mut f: F)
     where

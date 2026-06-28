@@ -19,6 +19,7 @@ impl<T, DataBuf, Q> Pool<T, DataBuf, Q>
 where
     Q: MPMCQueue<Item = IndexStorage>,
 {
+    #[track_caller]
     fn new(data_buf: DataBuf, index_queue: Q) -> Self {
         let cap = index_queue.capacity();
         for i in 0..cap {
@@ -150,6 +151,7 @@ impl<T, Q, DataBuf, IndexQ> Pooled<T, Q, DataBuf, IndexQ>
 where
     IndexQ: MPMCQueue<Item = IndexStorage>,
 {
+    #[track_caller]
     pub(crate) fn new_from(queue: Q, data_buf: DataBuf, idx_buf: IndexQ) -> Self {
         Self {
             q: queue,

@@ -34,6 +34,7 @@ where
 {
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
+    #[track_caller]
     pub(crate) fn with_slot<S>(size: usize) -> GrowableQueueCore<T, Q, S> {
         GrowableQueueCore {
             cores: [
@@ -329,6 +330,7 @@ impl<T, Q, S> NewSized for GrowableQueueCore<T, Q, S>
 where
     Q: NewSized,
 {
+    #[track_caller]
     fn with_size(size: usize) -> GrowableQueueCore<T, Q, S> {
         GrowableQueueCore::with_slot(size)
     }
@@ -338,6 +340,7 @@ impl<S> NewSized for QueueCore<BoxedBuffer<S>>
 where
     S: Default,
 {
+    #[track_caller]
     fn with_size(size: usize) -> Self {
         Self::new_in(BoxedBuffer::new(size))
     }
@@ -358,12 +361,14 @@ where
 {
     /// Constructs a new `DynamicQueue` with capacity `size` and slot type `Auto`.
     /// `T` must fit into the chosen slot type
+    #[track_caller]
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
     /// Constructs a new `DynamicQueue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
+    #[track_caller]
     pub fn with_slot<S>(size: usize) -> DynamicQueue<T, S>
     where
         S: SlotType<T>,

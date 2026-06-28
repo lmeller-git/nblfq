@@ -36,12 +36,14 @@ where
 
 impl<T> PooledDynamicQueue<T, Auto> {
     /// Constructs a new `PooledDynamicQueue` with capacity `size` and slot type `Auto`.
+    #[track_caller]
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
     #[allow(private_bounds)]
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
+    #[track_caller]
     pub fn with_slot<S>(size: usize) -> PooledDynamicQueue<T, S>
     where
         S: SlotType<ItemHandle<T>>,

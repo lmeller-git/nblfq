@@ -38,6 +38,7 @@ alloc = []
 pool = []
 dynamic = ["alloc"]
 atomic-fallback = ["portable-atomic/fallback"]
+unsafe-ptr48 = []
 
 [dependencies]
 crossbeam-utils = { version = "0.8.21", default-features = false }
