@@ -49,7 +49,7 @@ jobs:
           args: --out dist
           maturin-version: ${{ env.MATURIN_VERSION }}
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: python-sdist
           path: dist/*.tar.gz
@@ -91,7 +91,7 @@ jobs:
           manylinux: auto
           maturin-version: ${{ env.MATURIN_VERSION }}
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: python-wheel-${{ matrix.target }}
           path: dist/*.whl
