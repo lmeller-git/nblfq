@@ -310,10 +310,10 @@ mod bit64 {
         use alloc::{
             boxed::Box,
             rc::{self, Rc},
-            sync::{self, Arc},
         };
 
         use super::*;
+        use crate::sync::{self, Arc};
 
         // Safety:
         // This implementation assumes that pointers may be reconstructed from 48-bits using sign extenion.
@@ -559,10 +559,10 @@ mod full_bit64 {
         use alloc::{
             boxed::Box,
             rc::{self, Rc},
-            sync::{self, Arc},
         };
 
         use super::*;
+        use crate::sync::{self, Arc};
 
         // Safety:
         // casting *const T from and to u64 is safe
@@ -796,10 +796,10 @@ mod bit32 {
         use alloc::{
             boxed::Box,
             rc::{self, Rc},
-            sync::{self, Arc},
         };
 
         use super::*;
+        use crate::sync::{self, Arc};
 
         // Safety:
         // Casting from a ptr to a usize is safe

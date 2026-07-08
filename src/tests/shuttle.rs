@@ -22,6 +22,7 @@ where
                         assert_eq!(x, i as u32);
                         break;
                     }
+                    thread::yield_now();
                 }
             }
             assert!(q.pop().is_none());
@@ -29,7 +30,9 @@ where
 
         scope.spawn(|| {
             for i in 0..COUNT {
-                while q.push(i as u32).is_err() {}
+                while q.push(i as u32).is_err() {
+                    thread::yield_now();
+                }
             }
         });
     });
@@ -48,7 +51,9 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
+                    while q.push(i as u32).is_err() {
+                        thread::yield_now();
+                    }
                 }
             });
         }
@@ -58,6 +63,7 @@ where
                     if let Some(x) = q.pop() {
                         break x;
                     }
+                    thread::yield_now();
                 };
                 v[n as usize].fetch_add(1, Ordering::SeqCst);
             }
@@ -85,6 +91,7 @@ where
                         if let Some(x) = q.pop() {
                             break x;
                         }
+                        thread::yield_now();
                     };
                     v[n as usize].fetch_add(1, Ordering::SeqCst);
                 }
@@ -93,7 +100,9 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
+                    while q.push(i as u32).is_err() {
+                        thread::yield_now();
+                    }
                 }
             });
         }
@@ -130,9 +139,9 @@ where
                             while let Some(n) = q.pop() {
                                 v[n as usize].fetch_add(1, Ordering::SeqCst);
                             }
-                            crate::utils::Backoff::new().backoff();
                         }
                     }
+                    thread::yield_now();
                 }
             });
         }
@@ -166,7 +175,9 @@ where
         for _ in 0..THREADS / 2 {
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    while q.push(42).is_err() {}
+                    while q.push(42).is_err() {
+                        thread::yield_now();
+                    }
                     q.pop().unwrap();
                 }
             });
@@ -223,6 +234,7 @@ mod growth {
                         if let Some(x) = q.pop() {
                             break x;
                         }
+                        thread::yield_now();
                     };
                     v[n as usize].fetch_add(1, Ordering::SeqCst);
                 }
@@ -263,6 +275,7 @@ mod growth {
                             if let Some(x) = q.pop() {
                                 break x;
                             }
+                            thread::yield_now();
                         };
                         v[n as usize].fetch_add(1, Ordering::SeqCst);
                     }
@@ -364,7 +377,6 @@ mod growth {
             });
 
             scope.spawn(|| {
-                let mut backoff = crate::utils::Backoff::new();
                 for _ in 1..ITER {
                     let mut pushes = 0;
                     let mut backoff_inner = crate::utils::Backoff::new();
@@ -377,8 +389,6 @@ mod growth {
                         }
                         backoff_inner.backoff();
                     }
-
-                    backoff.backoff();
 
                     while q.pop().is_some() {
                         total_popped.fetch_add(1, Ordering::SeqCst);
@@ -410,6 +420,7 @@ mod growth {
                             assert_eq!(x, i as u32);
                             break;
                         }
+                        thread::yield_now();
                     }
                     let _len = q.len();
                 }
@@ -417,7 +428,9 @@ mod growth {
 
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
+                    while q.push(i as u32).is_err() {
+                        thread::yield_now();
+                    }
                     let _len = q.len();
                 }
             });
@@ -501,62 +514,66 @@ mod growth {
 
 cfg_atomic_tagged64! {
     mod taggedptr64 {
-        use crate::{Queue, core::slots::Tagged64};
-
         use super::*;
+        use crate::{Queue, core::slots::Tagged64};
 
         #[test]
         fn spsc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged64>(3);
                     spsc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged64>(3);
                     mpmc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_ring_buffer_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged64>(3);
                     mpmc_ring_buffer(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpsc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged64>(3);
                     mpsc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn linearizable_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged64>(4);
                     linearizable(q);
                 },
                 100,
+                4,
             );
         }
     }
@@ -564,62 +581,66 @@ cfg_atomic_tagged64! {
 
 cfg_atomic_tagged128! {
     mod taggedptr128 {
-        use crate::{Queue, core::slots::Tagged128};
-
         use super::*;
+        use crate::{Queue, core::slots::Tagged128};
 
         #[test]
         fn spsc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged128>(3);
                     spsc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<TaggedPtr64>(3);
                     mpmc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_ring_buffer_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged128>(3);
                     mpmc_ring_buffer(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpsc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged128>(3);
                     mpsc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn linearizable_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = Queue::with_slot::<Tagged128>(4);
                     linearizable(q);
                 },
                 100,
+                4,
             );
         }
     }
@@ -632,56 +653,61 @@ mod pool {
 
     #[test]
     fn spsc_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = PooledQueue::new(3);
                 spsc(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpmc_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = PooledQueue::new(3);
                 mpmc(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpmc_ring_buffer_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = PooledQueue::new(3);
                 mpmc_ring_buffer(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpsc_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = PooledQueue::new(3);
                 mpsc(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn linearizable_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = PooledQueue::new(4);
                 linearizable(q);
             },
             100,
+            4,
         );
     }
 }
@@ -693,123 +719,134 @@ mod growable {
 
     #[test]
     fn spsc_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(3);
                 spsc(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpmc_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(3);
                 mpmc(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpmc_ring_buffer_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(3);
                 mpmc_ring_buffer(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpsc_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(3);
                 mpsc(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn linearizable_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(4);
                 linearizable(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpsc_grow_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(4);
                 mpsc_grow(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn mpmc_resize_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(4);
                 mpmc_resize(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn len_grow_impl() {
         const CAP: usize = 40;
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(CAP);
                 len_grow(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn grow_storm_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(4);
                 grow_storm(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn oscillation_grow_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(4);
                 oscillation_grow(q);
             },
             100,
+            4,
         );
     }
 
     #[test]
     fn suppl_methods_chaos_impl() {
-        shuttle::check_random(
+        shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(4);
                 suppl_methods_chaos(q);
             },
             100,
+            4,
         );
     }
 
@@ -820,123 +857,134 @@ mod growable {
 
         #[test]
         fn spsc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(3);
                     spsc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(3);
                     mpmc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_ring_buffer_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(3);
                     mpmc_ring_buffer(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpsc_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(3);
                     mpsc(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn linearizable_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(4);
                     linearizable(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpsc_grow_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(4);
                     mpsc_grow(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn mpmc_resize_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(4);
                     mpmc_resize(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn len_grow_impl() {
             const CAP: usize = 40;
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(CAP);
                     len_grow(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn grow_storm_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(4);
                     grow_storm(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn oscillation_grow_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(4);
                     oscillation_grow(q);
                 },
                 100,
+                4,
             );
         }
 
         #[test]
         fn suppl_methods_chaos_impl() {
-            shuttle::check_random(
+            shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(4);
                     suppl_methods_chaos(q);
                 },
                 100,
+                4,
             );
         }
     }

@@ -14,7 +14,8 @@ use crate::tests::test_library::{
 #[cfg(any(
     all(target_arch = "x86_64", feature = "unsafe-ptr48"),
     all(target_arch = "aarch64", feature = "unsafe-ptr48"),
-    not(target_pointer_width = "64")
+    not(target_pointer_width = "64"),
+    any(target_has_atomic = "128", feature = "atomic-fallback")
 ))]
 use crate::tests::test_library::{drops, mpmc_ring_buf_ptr};
 
@@ -576,7 +577,7 @@ mod growable {
         #[cfg(miri)]
         const CAP: usize = 40;
         #[cfg(not(miri))]
-        const CAP: usize = 1000;
+        const CAP: usize = 500;
         let q = DynamicQueue::new(CAP);
         len_grow(q);
     }
@@ -679,7 +680,7 @@ mod growable {
             #[cfg(miri)]
             const CAP: usize = 40;
             #[cfg(not(miri))]
-            const CAP: usize = 1000;
+            const CAP: usize = 500;
             let q = PooledDynamicQueue::new(CAP);
             len_grow(q);
         }

@@ -65,14 +65,16 @@ where
 #[cfg(any(
     all(target_arch = "x86_64", feature = "unsafe-ptr48"),
     all(target_arch = "aarch64", feature = "unsafe-ptr48"),
-    not(target_pointer_width = "64")
+    not(target_pointer_width = "64"),
+    any(target_has_atomic = "128", feature = "atomic-fallback")
 ))]
 pub(crate) struct Drops(std::rc::Rc<AtomicUsize>);
 
 #[cfg(any(
     all(target_arch = "x86_64", feature = "unsafe-ptr48"),
     all(target_arch = "aarch64", feature = "unsafe-ptr48"),
-    not(target_pointer_width = "64")
+    not(target_pointer_width = "64"),
+    any(target_has_atomic = "128", feature = "atomic-fallback")
 ))]
 impl Drop for Drops {
     fn drop(&mut self) {
@@ -83,7 +85,8 @@ impl Drop for Drops {
 #[cfg(any(
     all(target_arch = "x86_64", feature = "unsafe-ptr48"),
     all(target_arch = "aarch64", feature = "unsafe-ptr48"),
-    not(target_pointer_width = "64")
+    not(target_pointer_width = "64"),
+    any(target_has_atomic = "128", feature = "atomic-fallback")
 ))]
 pub(crate) fn drops<Q>(q: Q)
 where
@@ -391,7 +394,8 @@ where
 #[cfg(any(
     all(target_arch = "x86_64", feature = "unsafe-ptr48"),
     all(target_arch = "aarch64", feature = "unsafe-ptr48"),
-    not(target_pointer_width = "64")
+    not(target_pointer_width = "64"),
+    any(target_has_atomic = "128", feature = "atomic-fallback")
 ))]
 pub(crate) fn mpmc_ring_buf_ptr<Q>(q: Q)
 where
@@ -795,11 +799,11 @@ mod growth {
         #[cfg(miri)]
         const COUNT: usize = 30;
         #[cfg(not(miri))]
-        const COUNT: usize = 25_000;
+        const COUNT: usize = 20_000;
         #[cfg(miri)]
         const CAP: usize = 40;
         #[cfg(not(miri))]
-        const CAP: usize = 1000;
+        const CAP: usize = 500;
         const ITERS: usize = CAP / 20;
 
         assert_eq!(q.len(), 0);

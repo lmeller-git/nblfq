@@ -284,10 +284,11 @@ dependencies = [
 
 [[package]]
 name = "echeneis"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8b9ac239d2c981c958e6541c0a62abdbd225550dbbfbdfc66f5cb819a73f430"
+checksum = "07a70952a0df0b3345930289968b9a359f87de1cb5ed823b57762fea8b3fd4e4"
 dependencies = [
+ "corosensei",
  "loom",
  "portable-atomic",
  "shuttle",

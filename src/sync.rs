@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+#![allow(clippy::disallowed_modules)]
 
 #[cfg(any(not(test), all(not(loom), not(shuttle), not(echeneis))))]
 pub(crate) use core_::*;
@@ -13,7 +14,10 @@ pub(crate) use shuttle_::*;
 mod shuttle_ {
     #[allow(unused_imports)]
     pub(crate) use shuttle::hint;
-    pub(crate) use shuttle::{sync::atomic, thread};
+    pub(crate) use shuttle::{
+        sync::{Arc, Weak, atomic},
+        thread,
+    };
 
     pub(crate) mod cell {
         #[derive(Debug)]
@@ -43,7 +47,7 @@ mod loom_ {
     pub(crate) use loom::{
         cell,
         hint,
-        sync::{Arc, atomic},
+        sync::{Arc, Weak, atomic},
         thread,
     };
 }
@@ -71,6 +75,8 @@ mod core_ {
             }
         }
     }
+    #[cfg(feature = "alloc")]
+    pub(crate) use alloc::sync::{Arc, Weak};
     pub(crate) use core::hint;
     #[cfg(feature = "std")]
     pub(crate) use std::thread;
@@ -102,6 +108,8 @@ mod echeneis_ {
             }
         }
     }
+    #[cfg(feature = "alloc")]
+    pub(crate) use alloc::sync::{Arc, Weak};
     pub(crate) use core::hint;
     #[cfg(feature = "std")]
     pub(crate) use std::thread;

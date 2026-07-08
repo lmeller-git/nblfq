@@ -46,16 +46,16 @@ crossbeam-utils = { version = "0.8.21", default-features = false }
 portable-atomic = { version = "1.13.1", default-features = false, features = ["require-cas"] }
 
 [dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.7"
 
 [target.'cfg(shuttle)'.dependencies]
-shuttle = "0.9.1"
+shuttle = "0.9"
 
 [target.'cfg(echeneis)'.dependencies]
-echeneis = { version = "0.1.1", features = ["portable-atomic", "atomic-fallback"] }
+echeneis = { version = "0.1", features = ["portable-atomic", "atomic-fallback"] }
 
 [target.'cfg(bench_crossbeam)'.dev-dependencies]
 crossbeam-queue = "0.3.12"
@@ -134,3 +134,5 @@ trait_duplication_in_bounds = "warn"
 uninlined_format_args = "warn"
 verbose_file_reads = "warn"
 zero_sized_map_values = "warn"
+
+disallowed-modules = "warn"
