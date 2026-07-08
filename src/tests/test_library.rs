@@ -1,14 +1,18 @@
+#![allow(dead_code)]
 //! Testing for nblfqueue
 //!
 //! Tests adapted from crossbeam-queue's test suite.
 //! <https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-queue>
 
-use std::{thread::scope, vec::Vec};
+use alloc::vec::Vec;
 
 use crate::{
     MPMCQueue,
     core::AsPackedValue,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        thread::scope,
+    },
 };
 
 pub(crate) fn smoke<Q>(q: Q)
@@ -107,13 +111,13 @@ pub(crate) fn len<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,
 {
-    #[cfg(miri)]
+    #[cfg(any(miri, loom, shuttle))]
     const COUNT: usize = 30;
-    #[cfg(not(miri))]
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 25_000;
-    #[cfg(miri)]
+    #[cfg(any(miri, loom, shuttle))]
     const CAP: usize = 40;
-    #[cfg(not(miri))]
+    #[cfg(not(any(miri, loom, shuttle)))]
     const CAP: usize = 1000;
     const ITERS: usize = CAP / 20;
 
@@ -199,9 +203,9 @@ pub(crate) fn spsc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,
 {
-    #[cfg(miri)]
+    #[cfg(any(miri, loom, shuttle))]
     const COUNT: usize = 50;
-    #[cfg(not(miri))]
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 300_000;
 
     scope(|scope| {
@@ -212,6 +216,7 @@ where
                         assert_eq!(x, i as u32);
                         break;
                     }
+                    crate::utils::Backoff::new().backoff();
                 }
             }
             assert!(q.pop().is_none());
@@ -219,7 +224,9 @@ where
 
         scope.spawn(|| {
             for i in 0..COUNT {
-                while q.push(i as u32).is_err() {}
+                while q.push(i as u32).is_err() {
+                    crate::utils::Backoff::new().backoff();
+                }
             }
         });
     });
@@ -229,9 +236,9 @@ pub(crate) fn mpsc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,
 {
-    #[cfg(miri)]
+    #[cfg(any(miri, loom, shuttle))]
     const COUNT: usize = 10;
-    #[cfg(not(miri))]
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 30_000;
     const THREADS: usize = 4;
 
@@ -241,7 +248,9 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
+                    while q.push(i as u32).is_err() {
+                        crate::utils::Backoff::new().backoff();
+                    }
                 }
             });
         }
@@ -251,6 +260,7 @@ where
                     if let Some(x) = q.pop() {
                         break x;
                     }
+                    crate::utils::Backoff::new().backoff();
                 };
                 v[n as usize].fetch_add(1, Ordering::SeqCst);
             }
@@ -266,9 +276,9 @@ pub(crate) fn mpmc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,
 {
-    #[cfg(miri)]
-    const COUNT: usize = 50;
-    #[cfg(not(miri))]
+    #[cfg(any(miri, loom, shuttle))]
+    const COUNT: usize = 20;
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 75_000;
     const THREADS: usize = 4;
 
@@ -282,6 +292,7 @@ where
                         if let Some(x) = q.pop() {
                             break x;
                         }
+                        crate::utils::Backoff::new().backoff();
                     };
                     v[n as usize].fetch_add(1, Ordering::SeqCst);
                 }
@@ -290,7 +301,9 @@ where
         for _ in 0..THREADS {
             scope.spawn(|| {
                 for i in 0..COUNT {
-                    while q.push(i as u32).is_err() {}
+                    while q.push(i as u32).is_err() {
+                        crate::utils::Backoff::new().backoff();
+                    }
                 }
             });
         }
@@ -305,9 +318,9 @@ pub(crate) fn mpmc_ring_buffer<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,
 {
-    #[cfg(miri)]
-    const COUNT: usize = 50;
-    #[cfg(not(miri))]
+    #[cfg(any(miri, loom, shuttle))]
+    const COUNT: usize = 20;
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 75_000;
     const THREADS: usize = 2;
 
@@ -332,6 +345,7 @@ where
                             }
                         }
                     }
+                    crate::utils::Backoff::new().backoff();
                 }
             });
         }
@@ -358,9 +372,9 @@ pub(crate) fn linearizable<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync,
 {
-    #[cfg(miri)]
-    const COUNT: usize = 100;
-    #[cfg(not(miri))]
+    #[cfg(any(miri, loom, shuttle))]
+    const COUNT: usize = 50;
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 25_000;
     const THREADS: usize = 4;
 
@@ -368,7 +382,9 @@ where
         for _ in 0..THREADS / 2 {
             scope.spawn(|| {
                 for _ in 0..COUNT {
-                    while q.push(42).is_err() {}
+                    while q.push(42).is_err() {
+                        crate::utils::Backoff::new().backoff();
+                    }
                     q.pop().unwrap();
                 }
             });
@@ -401,9 +417,9 @@ pub(crate) fn mpmc_ring_buf_ptr<Q>(q: Q)
 where
     Q: MPMCQueue<Item = Box<usize>> + Sync,
 {
-    #[cfg(miri)]
+    #[cfg(any(miri, loom, shuttle))]
     const COUNT: usize = 50;
-    #[cfg(not(miri))]
+    #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 75_000;
     const THREADS: usize = 2;
 
@@ -428,6 +444,7 @@ where
                             }
                         }
                     }
+                    crate::utils::Backoff::new().backoff();
                 }
             });
         }
@@ -571,9 +588,9 @@ mod growth {
     where
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
-        #[cfg(miri)]
-        const COUNT: usize = 50;
-        #[cfg(not(miri))]
+        #[cfg(any(miri, loom, shuttle))]
+        const COUNT: usize = 20;
+        #[cfg(not(any(miri, loom, shuttle)))]
         const COUNT: usize = 10_000;
         const THREADS: usize = 4;
         const GROW_STEP: usize = 10;
@@ -617,10 +634,14 @@ mod growth {
     where
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const COUNT: usize = 30;
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const COUNT: usize = 75_000;
+        #[cfg(any(miri, loom, shuttle))]
+        const RESIZE_ITER: usize = 5;
+        #[cfg(not(any(miri, loom, shuttle)))]
+        const RESIZE_ITER: usize = 100;
         const RESIZERS: usize = 2;
         const THREADS: usize = 4;
 
@@ -645,6 +666,7 @@ mod growth {
                             if let Some(x) = q.pop() {
                                 break x;
                             }
+                            crate::utils::Backoff::new().backoff();
                         };
                         v[n as usize].fetch_add(1, Ordering::SeqCst);
                     }
@@ -654,8 +676,8 @@ mod growth {
             for _ in 0..RESIZERS {
                 scope.spawn(|| {
                     let mut backoff = crate::utils::Backoff::new();
-                    for _ in 0..100 {
-                        q.resize(10 + q.capacity());
+                    for _ in 0..RESIZE_ITER {
+                        q.resize(2 + q.capacity());
                         backoff.backoff();
                     }
                 });
@@ -664,8 +686,8 @@ mod growth {
             for _ in 0..RESIZERS {
                 scope.spawn(|| {
                     let mut backoff = crate::utils::Backoff::new();
-                    for _ in 0..100 {
-                        q.resize(q.capacity().max(10) - 10);
+                    for _ in 0..RESIZE_ITER {
+                        q.resize(q.capacity().max(2) - 2);
                         backoff.backoff();
                     }
                 });
@@ -681,13 +703,13 @@ mod growth {
     where
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const THREADS: usize = 2;
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const THREADS: usize = 8;
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const ITERS: usize = 10;
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const ITERS: usize = 2000;
 
         let tracking_vector = (0..ITERS).map(|_| AtomicUsize::new(0)).collect::<Vec<_>>();
@@ -738,9 +760,9 @@ mod growth {
     where
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const ITER: usize = 100;
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const ITER: usize = 10;
 
         let total_popped = Arc::new(AtomicUsize::new(0));
@@ -761,7 +783,6 @@ mod growth {
             });
 
             scope.spawn(|| {
-                let mut backoff = crate::utils::Backoff::new();
                 for _ in 1..ITER {
                     let mut pushes = 0;
                     let mut backoff_inner = crate::utils::Backoff::new();
@@ -774,8 +795,6 @@ mod growth {
                         }
                         backoff_inner.backoff();
                     }
-
-                    backoff.backoff();
 
                     while q.pop().is_some() {
                         total_popped.fetch_add(1, Ordering::SeqCst);
@@ -796,13 +815,13 @@ mod growth {
     where
         Q: MPMCQueue<Item = u32> + Sync + Resize,
     {
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const COUNT: usize = 30;
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const COUNT: usize = 20_000;
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const CAP: usize = 40;
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const CAP: usize = 500;
         const ITERS: usize = CAP / 20;
 
@@ -844,6 +863,7 @@ mod growth {
                             assert_eq!(x, i as u32);
                             break;
                         }
+                        crate::utils::Backoff::new().backoff();
                     }
                     let _len = q.len();
                 }
@@ -860,9 +880,9 @@ mod growth {
             });
 
             scope.spawn(|| {
-                #[cfg(miri)]
+                #[cfg(any(miri, loom, shuttle))]
                 const GROW_ITERS: usize = 3;
-                #[cfg(not(miri))]
+                #[cfg(not(any(miri, loom, shuttle)))]
                 const GROW_ITERS: usize = 25;
 
                 let mut backoff = crate::utils::Backoff::new();
@@ -880,13 +900,13 @@ mod growth {
     where
         Q: Resize + MPMCQueue<Item = u32> + Sync,
     {
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const ITERS: usize = 10_000;
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const ITERS: usize = 30;
-        #[cfg(not(miri))]
+        #[cfg(not(any(miri, loom, shuttle)))]
         const GROW_CYCLES: usize = 500;
-        #[cfg(miri)]
+        #[cfg(any(miri, loom, shuttle))]
         const GROW_CYCLES: usize = 20;
         const GROW_STEP: usize = 10;
 
@@ -925,14 +945,11 @@ mod growth {
             });
 
             scope.spawn(|| {
-                let mut backoff = crate::utils::Backoff::new();
-
                 for _ in 0..GROW_CYCLES {
                     if q.resize(GROW_STEP + q.capacity()) {
                         total_grows.fetch_add(1, Ordering::SeqCst);
                     }
                     thread::yield_now();
-                    backoff.backoff();
                 }
             });
         });

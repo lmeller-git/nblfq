@@ -72,7 +72,7 @@ jobs:
       - name: cargo miri test
         run: |
           rustup override set ${{ env.NIGHTLY }}
-          cargo miri test
+          cargo miri test --all-features
         env:
           MIRIFLAGS: ""
 
@@ -87,7 +87,7 @@ jobs:
         with:
           toolchain: stable
       - name: cargo test loom
-        run: cargo test --lib --features dynamic --release
+        run: cargo test --lib --all-features --release
         env:
           LOOM_MAX_PREEMPTIONS: 2
           RUSTFLAGS: "--cfg loom"
@@ -103,7 +103,7 @@ jobs:
         with:
           toolchain: stable
       - name: cargo test shuttle
-        run: cargo test --lib --features dynamic
+        run: cargo test --lib --all-features
         env:
           RUSTFLAGS: "--cfg shuttle"
   echeneis:
@@ -117,6 +117,6 @@ jobs:
         with:
           toolchain: stable
       - name: cargo test echeneis
-        run: cargo test --lib --features dynamic
+        run: cargo test --lib --all-features
         env:
           RUSTFLAGS: "--cfg echeneis"

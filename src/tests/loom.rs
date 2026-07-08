@@ -73,7 +73,7 @@ cfg_atomic_tagged128! {
     }
 }
 
-#[cfg(feature = "pool")]
+#[cfg(all(feature = "pool", feature = "alloc"))]
 mod pooled {
     use super::*;
     use crate::PooledQueue;

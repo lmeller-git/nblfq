@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
 #![allow(clippy::disallowed_modules)]
 
-#[cfg(any(not(test), all(not(loom), not(shuttle), not(echeneis))))]
+#[cfg(all(not(loom), not(shuttle), not(echeneis)))]
 pub(crate) use core_::*;
 #[cfg(all(echeneis, test))]
 pub(crate) use echeneis_::*;
@@ -44,15 +44,18 @@ mod shuttle_ {
 
 #[cfg(all(loom, test))]
 mod loom_ {
+    // no Weak in loom
+    pub(crate) use std::sync::Weak;
+
     pub(crate) use loom::{
         cell,
         hint,
-        sync::{Arc, Weak, atomic},
+        sync::{Arc, atomic},
         thread,
     };
 }
 
-#[cfg(any(not(test), all(not(loom), not(shuttle), not(echeneis))))]
+#[cfg(all(not(loom), not(shuttle), not(echeneis)))]
 mod core_ {
     pub(crate) mod cell {
         #[derive(Debug)]
@@ -75,10 +78,10 @@ mod core_ {
             }
         }
     }
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", test))]
     pub(crate) use alloc::sync::{Arc, Weak};
     pub(crate) use core::hint;
-    #[cfg(feature = "std")]
+    #[cfg(any(feature = "std", test))]
     pub(crate) use std::thread;
 
     pub(crate) use portable_atomic as atomic;
@@ -108,9 +111,9 @@ mod echeneis_ {
             }
         }
     }
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", test))]
     pub(crate) use alloc::sync::{Arc, Weak};
     pub(crate) use core::hint;
-    #[cfg(feature = "std")]
+    #[cfg(any(feature = "std", test))]
     pub(crate) use std::thread;
 }

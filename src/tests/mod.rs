@@ -6,5 +6,6 @@ mod echeneis_tests;
 mod loom;
 #[cfg(shuttle)]
 mod shuttle;
-#[cfg(all(not(loom), not(shuttle)))]
+// not thread::scope in loom
+#[cfg(not(loom))]
 mod test_library;

@@ -791,7 +791,7 @@ mod bit32 {
         }
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", test))]
     mod alloc_ {
         use alloc::{
             boxed::Box,
@@ -915,7 +915,7 @@ mod bit32 {
     atomic_encode_non_zero_primitive!(NonZeroUsize, usize);
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(any(loom, shuttle))))]
 mod tests {
     use super::*;
 
@@ -970,35 +970,47 @@ mod tests {
         };
     }
 
-    generate_test!(raw: &VALUE as *const i32, *const i32);
-    generate_test!(raw_mut: &VALUE as *const i32 as *mut i32, *mut i32);
-    generate_test!(r#ref: &VALUE, &'static i32);
-    // we cannot compare two mutable borrows to the same data. Since the addrs is the same across *const T and &mut T, we simply deref to *const T.
-    generate_test!(ref_mut: Box::leak(Box::new(VALUE)), & 'static mut i32, |x: &&'static mut i32| *x as *const i32,
-        |x: &'static mut i32|
-            // Safety:
-            // drop is only called once on the decoded value
-            unsafe {Box::from_raw(x as *mut i32)}
-    );
-    generate_test!(nonnull: NonNull::new(&VALUE as *const i32 as *mut i32).unwrap(), NonNull<i32>);
     generate_test!(primitive_u32: 42, u32);
     generate_test!(primitive_nonzero_u32: NonZeroU32::new(42).unwrap(), NonZeroU32);
+    generate_test!(primitive_i32: -42, i32);
+    generate_test!(primitive_nonzero_i32: NonZeroI32::new(-42).unwrap(), NonZeroI32);
     generate_test!(unit: (), ());
 
-    #[cfg(feature = "alloc")]
-    mod alloc_ {
-        use alloc::{
-            boxed::Box,
-            rc::{self, Rc},
-            sync::{self, Arc},
-        };
-
+    #[cfg(any(
+        all(target_arch = "x86_64", feature = "unsafe-ptr48"),
+        all(target_arch = "aarch64", feature = "unsafe-ptr48"),
+        not(target_pointer_width = "64"),
+    ))]
+    mod ptr_ {
         use super::*;
+        generate_test!(nonnull: NonNull::new(&VALUE as *const i32 as *mut i32).unwrap(), NonNull<i32>);
+        generate_test!(raw: &VALUE as *const i32, *const i32);
+        generate_test!(raw_mut: &VALUE as *const i32 as *mut i32, *mut i32);
+        generate_test!(r#ref: &VALUE, &'static i32);
+        // we cannot compare two mutable borrows to the same data. Since the addrs is the same across *const T and &mut T, we simply deref to *const T.
+        generate_test!(ref_mut: Box::leak(Box::new(VALUE)), & 'static mut i32, |x: &&'static mut i32| *x as *const i32,
+            |x: &'static mut i32|
+                // Safety:
+                // drop is only called once on the decoded value
+                unsafe {Box::from_raw(x as *mut i32)}
+        );
 
-        generate_test!(r#box: Box::new(VALUE), Box<i32>);
-        generate_test!(r#arc: Arc::new(VALUE), Arc<i32>);
-        generate_test!(r#rc: Rc::new(VALUE), Rc<i32>);
-        generate_test!(weak_rc: Rc::downgrade(&Rc::new(VALUE)), rc::Weak<i32>, |x: &rc::Weak<i32>| x.as_ptr(), drop);
-        generate_test!(weak_arc: Arc::downgrade(&Arc::new(VALUE)), sync::Weak<i32>, |x: &sync::Weak<i32>| x.as_ptr(), drop);
+        #[cfg(any(feature = "alloc", test))]
+        mod alloc_ {
+            use alloc::{
+                boxed::Box,
+                rc::{self, Rc},
+                sync,
+            };
+
+            use super::*;
+            use crate::sync::Arc;
+
+            generate_test!(r#box: Box::new(VALUE), Box<i32>);
+            generate_test!(r#arc: Arc::new(VALUE), Arc<i32>);
+            generate_test!(r#rc: Rc::new(VALUE), Rc<i32>);
+            generate_test!(weak_rc: Rc::downgrade(&Rc::new(VALUE)), rc::Weak<i32>, |x: &rc::Weak<i32>| x.as_ptr(), drop);
+            generate_test!(weak_arc: Arc::downgrade(&Arc::new(VALUE)), sync::Weak<i32>, |x: &sync::Weak<i32>| x.as_ptr(), drop);
+        }
     }
 }

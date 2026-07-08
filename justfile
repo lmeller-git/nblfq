@@ -7,9 +7,9 @@ test-rs:
     cargo test --locked --no-default-features --all-targets
     cargo test --locked --no-default-features --doc
     cargo +nightly miri test --locked --all-features
-    LOOM_MAX_PREEMPTIONS=2 RUSTFLAGS="--cfg loom" cargo test --locked --lib --features dynamic
-    RUSTFLAGS="--cfg shuttle" cargo test --locked --lib --features dynamic
-    RUSTFLAGS="--cfg echeneis" cargo test --locked --lib --features dynamic
+    LOOM_MAX_PREEMPTIONS=2 RUSTFLAGS="--cfg loom" cargo test --locked --lib --all-features --release
+    RUSTFLAGS="--cfg shuttle" cargo test --locked --lib --all-features
+    RUSTFLAGS="--cfg echeneis" cargo test --locked --lib --all-features
 
 lint-rs:
     cargo +nightly fmt --all -- --check
@@ -18,7 +18,7 @@ lint-rs:
 check-rs:
     cargo +nightly docs-rs
     cargo hack --feature-powerset check
-    cargo semver-checks
+    cargo semver-checks --all-features
 
 build-py:
     uv sync
