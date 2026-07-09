@@ -49,7 +49,7 @@ portable-atomic = { version = "1.13.1", default-features = false, features = ["r
 criterion = { version = "0.8", features = ["html_reports"] }
 
 [target.'cfg(loom)'.dependencies]
-loom = "0.7"
+loom = { version = "0.7", features = ["checkpoint"] }
 
 [target.'cfg(shuttle)'.dependencies]
 shuttle = "0.9"
