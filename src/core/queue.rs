@@ -7,6 +7,7 @@ use crate::{
     utils::{Backoff, comp, prev},
 };
 
+#[derive(Debug)]
 pub(crate) struct QueueCore<B: Buffer> {
     /// The buffer of the queue holding Item<T>'s
     buffer: B,
@@ -61,9 +62,7 @@ where
                 let prev_components = prev_item.components();
                 let current_componets = current_item.components();
 
-                if !B::Slot::is_empty(prev_components.raw())
-                    && B::Slot::is_empty(current_componets.raw())
-                {
+                if !prev_components.is_empty() && current_componets.is_empty() {
                     break prev_components;
                 }
 
@@ -74,15 +73,11 @@ where
                     current_componets.get_count(),
                     B::Slot::MAX_W,
                 ) {
-                    if B::Slot::is_empty(prev_components.raw())
-                        && B::Slot::is_empty(current_componets.raw())
-                    {
+                    if prev_components.is_empty() && current_componets.is_empty() {
                         // empty list
                         break prev_components;
                     }
-                    if !B::Slot::is_empty(prev_components.raw())
-                        && !B::Slot::is_empty(current_componets.raw())
-                    {
+                    if !prev_components.is_empty() && !current_componets.is_empty() {
                         // list full
                         return Err(item);
                     }
@@ -92,7 +87,7 @@ where
 
             // at this point components is prev(current_component)
             let mut new_counter = components.get_count();
-            if B::Slot::is_empty(components.raw()) {
+            if components.is_empty() {
                 // empty list
                 new_counter = (new_counter + B::Slot::MAX_W - 1) % B::Slot::MAX_W;
             }
@@ -147,9 +142,7 @@ where
                     (current_components, current_item.components());
             }
 
-            if B::Slot::is_empty(prev_components.raw())
-                && B::Slot::is_empty(current_components.raw())
-            {
+            if prev_components.is_empty() && current_components.is_empty() {
                 // empty queue
                 return None;
             }
@@ -185,7 +178,7 @@ where
                 .get(head)
                 .expect("head outside of cap")
                 .components();
-            if B::Slot::is_empty(components.raw()) {
+            if components.is_empty() {
                 // empty
                 0
             } else {

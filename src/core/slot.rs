@@ -60,6 +60,10 @@ where
         let new = S::EMPTY_VALUE;
         self.value = S::put_count(new, S::extract_count(self.value));
     }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        S::is_empty(self.raw())
+    }
 }
 
 cfg_atomic_tagged64! {
@@ -76,8 +80,10 @@ cfg_atomic_tagged64! {
         // this slot stores the item in a tagged U64 value.
         // `count` takes up the upper 15 bits and `item` takes up the lower 48 bits.
         // this leaves 1 bit of state, which is used to encode `empty` vs `full`
+        // We need to differentiate between empty and full, because we may store items == Self::EMPTY_VALUE in the queue.
 
         #[allow(unnameable_types)]
+        #[derive(Debug)]
         pub struct Tagged64<T: AsPackedValue> {
             state: AtomicU64,
             _data: PhantomData<T>,
@@ -199,8 +205,10 @@ cfg_atomic_tagged128! {
         // this slot stores the item in a tagged U128 value.
         // `count` takes up the upper 63 bits and `item` takes up the lower 64 bits.
         // this leaves 1 bit of state, which is used to encode `empty` vs `full`
+        // We need to differentiate between empty and full, because we may store items == Self::EMPTY_VALUE in the queue.
 
         #[allow(unnameable_types)]
+        #[derive(Debug)]
         pub struct Tagged128<T: AsPackedValue> {
             storage: AtomicU128,
             _data: PhantomData<T>,
@@ -209,7 +217,7 @@ cfg_atomic_tagged128! {
         impl<T: AsPackedValue> Slot for Tagged128<T> {
             type Item = T;
             type Storage = u128;
-            const MAX_W: u64 = u64::MAX / 2; // artificially set MAX_W low, to ensure it does not overlfow
+            const MAX_W: u64 = u64::MAX / 2 + 1;
             const EMPTY_VALUE: Self::Storage = 0;
             const MAX_CARGO_BIT_WIDTH: usize = MAX_CARGO_BIT_WIDTH;
 

@@ -915,7 +915,7 @@ mod bit32 {
     atomic_encode_non_zero_primitive!(NonZeroUsize, usize);
 }
 
-#[cfg(all(test, not(any(loom, shuttle))))]
+#[cfg(all(test, not(any(loom, shuttle, echeneis))))]
 mod tests {
     use super::*;
 
