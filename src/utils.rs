@@ -124,7 +124,7 @@ pub(crate) fn sign_extend(ptr: u64) -> u64 {
     }
 }
 
-#[cfg(all(test, not(loom), not(shuttle)))]
+#[cfg(all(test, not(loom), not(shuttle), not(echeneis)))]
 mod tests {
     use super::*;
 

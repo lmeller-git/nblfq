@@ -67,6 +67,9 @@ impl<T, Q, S> Drop for GrowableQueueCore<T, Q, S> {
     }
 }
 
+// we need SeqCst on epoch atomics and active_* atomics on the synchronization points,
+// because we have to synchronize between an asymmetric read/write - write/read pattern across the two
+
 impl<T, Q, S> Resize for GrowableQueueCore<T, Q, S>
 where
     Q: NewSized + MPMCQueue<Item = T>,
@@ -75,8 +78,10 @@ where
         if size == 0 {
             return false;
         }
-        let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
-        let push_epoch = self.push_epoch.load(Ordering::Acquire);
+        #[cfg(loom)]
+        crate::sync::atomic::fence(Ordering::SeqCst);
+        let push_epoch = self.push_epoch.load(Ordering::SeqCst);
+        let pop_epoch = self.pop_epoch.load(Ordering::SeqCst);
 
         if pop_epoch != push_epoch {
             return false;
@@ -105,28 +110,35 @@ where
         let old_idx = (push_epoch + 1) % 2;
         let mut backoff = Backoff::new();
 
-        while self.active_reads[old_idx].load(Ordering::Acquire) != 0 {
+        // wait on any stale readers of the old queue.
+        // Note that at any point during AND after this loop other threads may still register as NEW readers on the OLD queue;
+        // This is safe, because they will revalidate the epoch after registration and NOT actually read the underlying queue.
+        // However this menas that we may spin for longer than strictly necessary to ensure noone is actually reading the old queue.
+        while {
+            crate::sync::atomic::fence(Ordering::SeqCst);
+            self.active_reads[old_idx].load(Ordering::Acquire) != 0
+                || self.active_pushes[old_idx].load(Ordering::Acquire) != 0
+        } {
             backoff.backoff();
         }
-
-        debug_assert_eq!(
-            self.active_pushes[(push_epoch + 1) % 2].load(Ordering::SeqCst),
-            0
-        );
 
         let new_queue = Box::into_raw(Box::new(Q::with_size(size)));
 
         // Safety:
         // since pop_epoch == push_epoch all concurrent threads acces the queue at push_epoch % 2.
         // pop ensures that no pushes are in flight to the old queue anymore and that it is empty. We can safely drop it.
-        let old_queue = self.cores[(push_epoch + 1) % 2].swap(new_queue, Ordering::AcqRel);
+        let old_queue = self.cores[old_idx].swap(new_queue, Ordering::AcqRel);
+
         self.push_epoch.fetch_add(1, Ordering::Release);
 
         // Safety:
         // old_queue was ocnstucted from a Box::into_raw and is dropped only once, as ensured by epoch guards
         let q = unsafe { Box::from_raw(old_queue) };
 
+        #[cfg(not(any(loom, shuttle)))]
         debug_assert!(q.pop().is_none());
+        #[cfg(any(loom, shuttle))]
+        assert!(q.pop().is_none());
 
         self.is_resizing.store(false, Ordering::Release);
         true
@@ -137,19 +149,39 @@ impl<T, Q, S> GrowableQueueCore<T, Q, S> {
     fn get_queue(&self, epoch: usize) -> &Q {
         let queue = self.cores[epoch % 2].load(Ordering::Acquire);
         // Safety:
-        // It is guranteed by `grow_by` that no concurrent mutable access can happen to any queue in cores.
+        // It is guranteed by `resize` that no concurrent mutable access can happen to any queue in cores.
         // It is safe to access it concurrently via shared ref, as long as queue core is Sync.
         unsafe { &*queue }
     }
 
-    fn register_reader(&self, target_epoch: usize) -> bool {
-        self.active_reads[target_epoch % 2].fetch_add(1, Ordering::Release);
+    fn register_push(&self, target_epoch: usize) -> bool {
+        #[cfg(loom)]
+        crate::sync::atomic::fence(Ordering::SeqCst);
+        self.active_reads[target_epoch % 2].fetch_add(1, Ordering::SeqCst);
 
+        #[cfg(loom)]
+        crate::sync::atomic::fence(Ordering::SeqCst);
         let current_push = self.push_epoch.load(Ordering::SeqCst);
+
+        // It is safe to read if the target epoch is still structurally active
+        if target_epoch != current_push {
+            self.deregister_reader(target_epoch);
+            return false;
+        }
+        true
+    }
+
+    fn register_pop(&self, target_epoch: usize) -> bool {
+        #[cfg(loom)]
+        crate::sync::atomic::fence(Ordering::SeqCst);
+        self.active_reads[target_epoch % 2].fetch_add(1, Ordering::SeqCst);
+
+        #[cfg(loom)]
+        crate::sync::atomic::fence(Ordering::SeqCst);
         let current_pop = self.pop_epoch.load(Ordering::SeqCst);
 
         // It is safe to read if the target epoch is still structurally active
-        if target_epoch != current_push && target_epoch != current_pop {
+        if target_epoch != current_pop {
             self.deregister_reader(target_epoch);
             return false;
         }
@@ -172,6 +204,8 @@ where
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
             self.active_pushes[push_epoch % 2].fetch_add(1, Ordering::Release);
 
+            #[cfg(loom)]
+            crate::sync::atomic::fence(Ordering::SeqCst);
             if self.push_epoch.load(Ordering::SeqCst) == push_epoch {
                 let r = self.get_queue(push_epoch).push(item);
 
@@ -182,15 +216,17 @@ where
         }
     }
 
+    /// This method may block under concurrent resizes
     fn pop(&self) -> Option<Self::Item> {
+        let mut backoff = Backoff::new();
         loop {
-            let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
+            let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
 
             if pop_epoch != push_epoch {
                 // drain old buffer
 
-                if !self.register_reader(pop_epoch) {
+                if !self.register_pop(pop_epoch) {
                     continue;
                 }
 
@@ -204,7 +240,7 @@ where
                 }
 
                 if self.active_pushes[pop_epoch % 2].load(Ordering::Acquire) == 0 {
-                    if !self.register_reader(pop_epoch) {
+                    if !self.register_pop(pop_epoch) {
                         continue;
                     }
 
@@ -226,17 +262,30 @@ where
                     continue;
                 }
 
-                // at this point the old queue did not contain any items, even though items are in-flight. We can move on to the new queue and attempt to pop from that queue.
-                // This does not break linearizability because the push operation to the old queue was overlapping with the push operation to the new queue.
+                // at this point the old queue did not contain any items, even though items are in-flight. At this point the new queue may already contain items.
+                // We face a tradeoff:
+                //
+                // a) continue in the inner loop and block on the active_pushers -> violates non-blocking/obstruction-freedom guarantees
+                // b) check the new queue -> opens up the possibilty for item reordering, even in spsc scenarios, i.e. violates FIFO guarantees + linearizability
+                // c) bail, even though the queue is non-empty -> violates linearizability (and emptiness assumptions) in that case.
+                // Even worse: if some active_pusher is indefinitely dead, we will henceforth only bail. Thus this option implicitly blocks on the stalled pusher.
+                //
+                // b and c are unacceptable, because they make the queue behave in unexpected ways AND may lead to implicit blocking behaviours.
+                backoff.backoff();
+                continue;
             }
 
-            if !self.register_reader(push_epoch) {
+            if !self.register_push(push_epoch) {
                 continue;
             }
 
             let item = self.get_queue(push_epoch).pop();
 
             self.deregister_reader(push_epoch);
+
+            if item.is_none() && push_epoch != self.push_epoch.load(Ordering::Acquire) {
+                continue;
+            }
 
             return item;
         }
@@ -246,7 +295,7 @@ where
         // the capacity of the currently active queue, i.e. the number of elements that can be pushed directly after resize
         loop {
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
-            if !self.register_reader(push_epoch) {
+            if !self.register_push(push_epoch) {
                 continue;
             }
             let cap = self.get_queue(push_epoch).capacity();
@@ -259,13 +308,13 @@ where
         // the total elements in the queue. Note that len can be > capacity.
         loop {
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
-            if !self.register_reader(push_epoch) {
+            if !self.register_push(push_epoch) {
                 continue;
             }
 
             let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
             let pop_len = if pop_epoch != push_epoch {
-                if !self.register_reader(pop_epoch) {
+                if !self.register_pop(pop_epoch) {
                     self.deregister_reader(push_epoch);
                     continue;
                 }
@@ -287,13 +336,13 @@ where
         // the queue is empty if pop() returns None
         loop {
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
-            if !self.register_reader(push_epoch) {
+            if !self.register_push(push_epoch) {
                 continue;
             }
 
             let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
             let pop_is_empty = if pop_epoch != push_epoch {
-                if !self.register_reader(pop_epoch) {
+                if !self.register_pop(pop_epoch) {
                     self.deregister_reader(push_epoch);
                     continue;
                 }
@@ -315,7 +364,7 @@ where
         // the queue is full if push() fails
         loop {
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
-            if !self.register_reader(push_epoch) {
+            if !self.register_push(push_epoch) {
                 continue;
             }
             let is_full = self.get_queue(push_epoch).is_full();
@@ -390,6 +439,7 @@ where
         self.inner.push(item)
     }
 
+    /// This method may block under concurrent resizes
     fn pop(&self) -> Option<Self::Item> {
         self.inner.pop()
     }

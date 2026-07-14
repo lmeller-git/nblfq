@@ -9,9 +9,6 @@ use crate::{
     },
 };
 
-// TODO add more tests, however even simple tests are already too large...
-
-// way to small i think
 pub(crate) fn linearizable<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync + 'static,
@@ -26,8 +23,9 @@ where
         let q2 = q.clone();
         threads.push(thread::spawn(move || {
             for _ in 0..COUNT {
-                while q2.push(42).is_err() {}
-                thread::yield_now();
+                while q2.push(42).is_err() {
+                    thread::yield_now();
+                }
                 q2.pop().unwrap();
             }
         }));
@@ -93,7 +91,6 @@ pub(crate) fn mpsc<Q>(q: Q)
 where
     Q: MPMCQueue<Item = u32> + Sync + Send + 'static,
 {
-    return;
     const COUNT: usize = 2;
     const THREADS: usize = 2;
 
@@ -143,41 +140,103 @@ where
     const RESIZE_ITER: usize = 1;
 
     let q = Arc::new(q);
+    let count = Arc::new(AtomicUsize::new(0));
 
     let q1 = q.clone();
-    let push = thread::spawn(move || {
-        for i in 0..ITER {
-            while q1.push(i as i32).is_err() {
-                thread::yield_now();
+    let push = thread::Builder::new()
+        .name("push".into())
+        .spawn(move || {
+            for i in 0..ITER {
+                while q1.push(i as i32).is_err() {
+                    thread::yield_now();
+                }
             }
-        }
-    });
+        })
+        .unwrap();
 
     let q2 = q.clone();
-    let resize = thread::spawn(move || {
-        for _ in 0..RESIZE_ITER {
-            _ = q2.resize(q2.capacity() + 1);
-            thread::yield_now();
-        }
-    });
+    let resize = thread::Builder::new()
+        .name("resize".into())
+        .spawn(move || {
+            for _ in 0..RESIZE_ITER {
+                _ = q2.resize(q2.capacity() + 1);
+                thread::yield_now();
+            }
+        })
+        .unwrap();
 
     let q3 = q.clone();
-    let pop = thread::spawn(move || {
-        for i in 0..ITER {
-            let item = loop {
-                if let Some(x) = q3.pop() {
-                    break x;
-                }
-                thread::yield_now();
-            };
-
-            assert_eq!(item, i as i32);
-        }
-    });
+    let c = count.clone();
+    let pop = thread::Builder::new()
+        .name("pop".into())
+        .spawn(move || {
+            for i in 0..ITER {
+                let item = loop {
+                    if let Some(x) = q3.pop() {
+                        break x;
+                    }
+                    thread::yield_now();
+                };
+                c.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(item, i as i32);
+            }
+        })
+        .unwrap();
 
     push.join().unwrap();
     pop.join().unwrap();
     resize.join().unwrap();
+
+    assert_eq!(count.load(Ordering::SeqCst), ITER);
+}
+
+#[cfg(feature = "dynamic")]
+pub(crate) fn linearizable_during_resize<Q>(q: Q)
+where
+    Q: MPMCQueue<Item = u32> + Resize + Sync + 'static,
+{
+    const COUNT: usize = 1;
+    const THREADS: usize = 2;
+    let q = Arc::new(q);
+
+    let mut threads = Vec::new();
+
+    for _ in 0..THREADS / 2 {
+        let q2 = q.clone();
+        threads.push(thread::spawn(move || {
+            for _ in 0..COUNT {
+                while q2.push(42).is_err() {
+                    thread::yield_now();
+                }
+                q2.pop().unwrap();
+            }
+        }));
+
+        let q = q.clone();
+        threads.push(thread::spawn(move || {
+            for _ in 0..COUNT {
+                let popped = &mut false;
+                q.force_push_and_do(42, |_| {
+                    if *popped {
+                        panic!("popped multiple items")
+                    }
+                    *popped = true;
+                });
+                if !*popped {
+                    q.pop().unwrap();
+                }
+            }
+        }));
+    }
+
+    let q = q.clone();
+    threads.push(thread::spawn(move || {
+        _ = q.resize(q.capacity() + 1);
+    }));
+
+    for t in threads {
+        t.join().unwrap();
+    }
 }
 
 cfg_atomic_tagged64! {
@@ -310,6 +369,14 @@ mod growable {
         });
     }
 
+    #[test]
+    fn linearizable_during_resize_impl() {
+        loom::model(|| {
+            let q = DynamicQueue::new(2);
+            linearizable_during_resize(q);
+        });
+    }
+
     #[cfg(feature = "pool")]
     mod pool {
         use super::*;
@@ -344,6 +411,14 @@ mod growable {
             loom::model(|| {
                 let q = PooledDynamicQueue::new(1);
                 push_pop_resize(q);
+            });
+        }
+
+        #[test]
+        fn linearizable_during_resize_impl() {
+            loom::model(|| {
+                let q = PooledDynamicQueue::new(2);
+                linearizable_during_resize(q);
             });
         }
     }

@@ -512,10 +512,12 @@ pub(crate) use growth::*;
 
 #[cfg(feature = "dynamic")]
 mod growth {
-    use std::{sync::Arc, thread};
 
     use super::*;
-    use crate::Resize;
+    use crate::{
+        Resize,
+        sync::{Arc, thread},
+    };
 
     pub(crate) fn smoke_grow<Q>(q: Q)
     where
@@ -986,5 +988,104 @@ mod growth {
         drop(q);
 
         assert_eq!(counter.load(Ordering::Acquire), 0);
+    }
+
+    pub(crate) fn linearizable_during_resize<Q>(q: Q)
+    where
+        Q: MPMCQueue<Item = u32> + Resize + Sync,
+    {
+        #[cfg(any(miri, loom, shuttle))]
+        const COUNT: usize = 50;
+        #[cfg(not(any(miri, loom, shuttle)))]
+        const COUNT: usize = 25_000;
+        #[cfg(any(miri, loom, shuttle))]
+        const RESIZE_COUNT: usize = 5;
+        #[cfg(not(any(miri, loom, shuttle)))]
+        const RESIZE_COUNT: usize = 50;
+        const THREADS: usize = 4;
+
+        scope(|scope| {
+            for _ in 0..THREADS / 2 {
+                scope.spawn(|| {
+                    for _ in 0..COUNT {
+                        while q.push(42).is_err() {
+                            crate::utils::Backoff::new().backoff();
+                        }
+                        q.pop().unwrap();
+                    }
+                });
+
+                scope.spawn(|| {
+                    for _ in 0..COUNT {
+                        let popped = &mut false;
+                        q.force_push_and_do(42, |_| {
+                            if *popped {
+                                panic!("popped multiple items")
+                            }
+                            *popped = true;
+                        });
+                        if !*popped {
+                            q.pop().unwrap();
+                        }
+                    }
+                });
+            }
+
+            scope.spawn(|| {
+                for _ in 0..RESIZE_COUNT {
+                    _ = q.resize(q.capacity() + 2);
+                    thread::yield_now();
+                }
+            });
+        });
+    }
+
+    pub(crate) fn push_pop_resize<Q>(q: Q)
+    where
+        Q: MPMCQueue<Item = i32> + Resize + Sync + Send + 'static,
+    {
+        const ITER: usize = 2;
+        const RESIZE_ITER: usize = 1;
+
+        let q = Arc::new(q);
+        let count = Arc::new(AtomicUsize::new(0));
+
+        let q1 = q.clone();
+        let push = thread::spawn(move || {
+            for i in 0..ITER {
+                while q1.push(i as i32).is_err() {
+                    thread::yield_now();
+                }
+            }
+        });
+
+        let q2 = q.clone();
+        let resize = thread::spawn(move || {
+            for _ in 0..RESIZE_ITER {
+                _ = q2.resize(q2.capacity() + 1);
+                thread::yield_now();
+            }
+        });
+
+        let q3 = q.clone();
+        let c = count.clone();
+        let pop = thread::spawn(move || {
+            for i in 0..ITER {
+                let item = loop {
+                    if let Some(x) = q3.pop() {
+                        break x;
+                    }
+                    thread::yield_now();
+                };
+                c.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(item, i as i32);
+            }
+        });
+
+        push.join().unwrap();
+        pop.join().unwrap();
+        resize.join().unwrap();
+
+        assert_eq!(count.load(Ordering::SeqCst), ITER);
     }
 }

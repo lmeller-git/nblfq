@@ -64,6 +64,7 @@ where
         self.inner.push(item)
     }
 
+    /// This method may block under concurrent resizes
     fn pop(&self) -> Option<Self::Item> {
         self.inner.pop()
     }

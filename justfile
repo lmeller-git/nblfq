@@ -39,3 +39,7 @@ test: test-rs test-py
 lint: lint-rs lint-py
 
 check: check-rs
+
+bench:
+    RUSTFLAGS="--cfg bench_crossbeam" cargo bench --all-features
+

@@ -2,6 +2,7 @@ use alloc::boxed::Box;
 
 use crate::core::buffer::Buffer;
 
+#[derive(Debug)]
 pub(crate) struct BoxedBuffer<S> {
     inner: Box<[S]>,
 }

@@ -208,9 +208,11 @@ mod growable {
         tests::test_library::{
             grow_storm,
             len_grow,
+            linearizable_during_resize,
             mpmc_resize,
             mpsc_grow,
             oscillation_grow,
+            push_pop_resize,
             suppl_methods_chaos,
         },
     };
@@ -346,6 +348,30 @@ mod growable {
             100,
             4,
         );
+    }
+
+    #[test]
+    fn linearizable_during_resize_impl() {
+        shuttle::check_pct(
+            || {
+                let q = DynamicQueue::new(4);
+                linearizable_during_resize(q);
+            },
+            5000,
+            100,
+        );
+    }
+
+    #[test]
+    fn push_pop_resize_impl() {
+        shuttle::check_pct(
+            || {
+                let q = DynamicQueue::new(4);
+                push_pop_resize(q);
+            },
+            1000,
+            20,
+        )
     }
 
     #[cfg(feature = "pool")]
@@ -484,6 +510,30 @@ mod growable {
                 100,
                 4,
             );
+        }
+
+        #[test]
+        fn linearizable_during_resize_impl() {
+            shuttle::check_pct(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    linearizable_during_resize(q);
+                },
+                100,
+                4,
+            );
+        }
+
+        #[test]
+        fn push_pop_resize_impl() {
+            shuttle::check_pct(
+                || {
+                    let q = PooledDynamicQueue::new(4);
+                    push_pop_resize(q);
+                },
+                100,
+                4,
+            )
         }
     }
 }
