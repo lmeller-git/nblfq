@@ -203,6 +203,7 @@ where
     type Item = T;
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
+        let mut backoff = Backoff::new();
         loop {
             let push_epoch = self.push_epoch.load(Ordering::Acquire);
             self.active_pushes[push_epoch % 2].fetch_add(1, Ordering::Release);
@@ -216,6 +217,7 @@ where
                 return r;
             }
             self.active_pushes[push_epoch % 2].fetch_sub(1, Ordering::Release);
+            backoff.backoff();
         }
     }
 
@@ -232,6 +234,8 @@ where
                 // drain old buffer
 
                 if !self.register_pop(pop_epoch) {
+                    #[cfg(any(shuttle, loom))]
+                    backoff.backoff();
                     continue;
                 }
 
@@ -246,6 +250,8 @@ where
 
                 if self.active_pushes[pop_epoch % 2].load(Ordering::Acquire) == 0 {
                     if !self.register_pop(pop_epoch) {
+                        #[cfg(any(shuttle, loom))]
+                        backoff.backoff();
                         continue;
                     }
 
@@ -264,6 +270,8 @@ where
                         Ordering::Relaxed,
                     );
 
+                    #[cfg(any(shuttle, loom))]
+                    backoff.backoff();
                     continue;
                 }
 
@@ -289,6 +297,8 @@ where
             self.deregister_reader(push_epoch);
 
             if item.is_none() && push_epoch != self.push_epoch.load(Ordering::Acquire) {
+                #[cfg(any(shuttle, loom))]
+                backoff.backoff();
                 continue;
             }
 
