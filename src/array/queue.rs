@@ -91,7 +91,9 @@ mod pooled_static {
     ///
     /// Unlike `StaticQueue`, this queue may store any item at the cost of higher runtime and higher memory.
     ///
-    /// Only available on feature `pool`
+    /// Only available on feature `pool`.
+    ///
+    /// For more info refer to `StaticQueue`.
     #[allow(private_bounds)]
     pub struct PooledStaticQueue<T, const N: usize, S = Auto>
     where

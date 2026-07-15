@@ -17,7 +17,10 @@ use crate::{
     utils::Backoff,
 };
 
-/// A lock-free non blocking queue, that may dynamically grow.
+/// A dynamically sized concurrent queue.
+///
+/// Operations on this queue are lock-free if `resize` is not actively used.
+/// During an ongoing `resize` operation, `pop` and operations depending on it may block on stalled `pushes`.
 pub(crate) struct GrowableQueueCore<T, Q, S = Auto> {
     cores: [AtomicPtr<Q>; 2],
     push_epoch: CachePadded<AtomicUsize>,
@@ -216,7 +219,9 @@ where
         }
     }
 
-    /// This method may block under concurrent resizes
+    /// This method may block on stalling pushes under concurrent resizes.
+    ///
+    /// For more info refer to the trait-level docs of `MPMCQueue`.
     fn pop(&self) -> Option<Self::Item> {
         let mut backoff = Backoff::new();
         loop {
@@ -395,7 +400,10 @@ where
     }
 }
 
-/// A lock-free, non-blocking queue, that may dynamically resize its capacity.
+/// A dynamically sized concurrent queue.
+///
+/// Operations on this queue are lock-free if `resize` is not actively used.
+/// During an ongoing `resize` operation, `pop` and operations depending on it may block on stalled `pushes`.
 pub struct DynamicQueue<T, S = Auto>
 where
     S: SlotType<T>,
@@ -439,7 +447,9 @@ where
         self.inner.push(item)
     }
 
-    /// This method may block under concurrent resizes
+    /// This method may block on stalling pushes under concurrent resizes.
+    ///
+    /// For more info refer to the trait-level docs of `MPMCQueue`.
     fn pop(&self) -> Option<Self::Item> {
         self.inner.pop()
     }

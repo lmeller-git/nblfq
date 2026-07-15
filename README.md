@@ -14,7 +14,8 @@ An atomic lock-free MPMC queue based on the NBLFQ algorithm.
 
 This repository provides multiple queue implementations with different storage and allocation strategies.
 
-All queues in this repository are safe to use in a concurrent context and will never block the calling thread.
+All queues in this repository are safe to use in a concurrent context.
+Most variants are strictly non-blocking and will never block the calling thread, with the exception of dynamic queues, which may sometimes block on some operations.
 
 ## Queue variants
 
@@ -111,6 +112,14 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 - `PooledStaticQueue` and `PooledQueue`: may store arbitrary types, at the cost of higher memory usage and runtime cost.
 
 - `DynamicQueue` and `PooledDynamicQueue`: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
+
+> [!WARNING]
+> **Blocking Behaviour in Dynamic Queues**
+>
+> All dynamic queues may block on concurrent `resize` operations.
+>
+> Additionally, dynamic queues may block on `pop` operations (and operations depending on it), if a `push` is preempted by a concurrent `resize` and a concurrent `pop` happens.
+
 
 ## Platform Support
 

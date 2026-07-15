@@ -25,7 +25,9 @@ where
 ///
 /// Unlike `DynamicQueue`, this queue may store any type, at the cost of higher runtime and higher memory.
 ///
-/// Only available on feature `dynamic` + `pool`
+/// Only available on feature `dynamic` + `pool`.
+///
+/// For more info refer to `DynamicQueue`.
 #[allow(private_bounds)]
 pub struct PooledDynamicQueue<T, S = Auto>
 where
@@ -64,7 +66,9 @@ where
         self.inner.push(item)
     }
 
-    /// This method may block under concurrent resizes
+    /// This method may block on stalling pushes under concurrent resizes.
+    ///
+    /// For more info refer to the trait-level docs of `MPMCQueue`.
     fn pop(&self) -> Option<Self::Item> {
         self.inner.pop()
     }

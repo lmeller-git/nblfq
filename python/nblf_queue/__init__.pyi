@@ -28,6 +28,8 @@ class DynamicQueue(Generic[_T]):
         Attempts to pop an item from the queue.
 
         Returns `None` if the queue was empty.
+
+        This method may block on stalling pushes during an ongoing concurrent resize.
         """
         ...
 
@@ -70,6 +72,8 @@ class DynamicQueue(Generic[_T]):
         This method may pop an arbitrary amount of items from the queue.
 
         Returns the last popped item, if the queue was full. All other items are dropped.
+
+        This method may block on stalling pushes during an ongoing concurrent resize.
         """
         ...
 
@@ -78,7 +82,10 @@ class DynamicQueue(Generic[_T]):
         Pushes an item into the queue.
         This method may take some time under heavy contention.
         This method may pop an arbitrary amount of items from the queue.
+
         Applies `f` to each popped item.
+
+        This method may block on stalling pushes during an ongoing concurrent resize.
         """
         ...
 
@@ -178,6 +185,7 @@ class Queue(Generic[_T]):
         Pushes an item into the queue.
         This method may take some time under heavy contention.
         This method may pop an arbitrary amount of items from the queue.
+
         Applies `f` to each popped item.
         """
         ...

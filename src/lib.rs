@@ -123,6 +123,8 @@ pub trait MPMCQueue {
     ///
     /// Under contention this method may spin for some time, however it will never block.
     ///
+    /// Note that the behaviour of this method depends on both `push` and `pop`.
+    ///
     /// # Examples
     ///
     /// ```rust
@@ -149,6 +151,8 @@ pub trait MPMCQueue {
     /// The provided closure will be called on each removed item.
     ///
     /// Under contention this method may spin for some time, however it will never block, provided the passed closure does not block.
+    ///
+    /// Note that the behaviour of this method depends on both `push` and `pop`.
     ///
     /// # Examples
     ///

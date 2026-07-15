@@ -81,7 +81,9 @@ mod pooled_queue {
     ///
     /// Unlike `Queue`, this queue may store any type, at the cost of higher runtime and higher memory.
     ///
-    /// Only available on feature `alloc` + `pool`
+    /// Only available on feature `alloc` + `pool`.
+    ///
+    /// For more info refer to `Queue`.
     #[allow(private_bounds)]
     pub struct PooledQueue<T, S = Auto>
     where
