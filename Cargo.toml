@@ -9,6 +9,7 @@ keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 description.workspace = true
+documentation.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
