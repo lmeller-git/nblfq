@@ -35,16 +35,17 @@ rust-version = "1.85.0"
 
 [features]
 default = ["pool"]
-std = ["alloc"]
-alloc = []
+std = ["alloc", "lf-slots/std"]
+alloc = ["lf-slots/alloc"]
 pool = []
 dynamic = ["alloc"]
-atomic-fallback = ["portable-atomic/fallback"]
+atomic-fallback = ["portable-atomic/fallback", "lf-slots/atomic-fallback"]
 unsafe-ptr48 = []
 
 [dependencies]
 crossbeam-utils = { version = "0.8.21", default-features = false }
 portable-atomic = { version = "1.13.1", default-features = false, features = ["require-cas"] }
+lf-slots = { path = "../nblf-indexstore", default-features = false }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

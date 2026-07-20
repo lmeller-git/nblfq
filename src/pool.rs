@@ -1,88 +1,99 @@
 use core::{fmt::Debug, marker::PhantomData};
 
+use lf_slots::{RawStorage, StorageData};
+
 use crate::{
     MPMCQueue,
     core::{AsPackedValue, TruncatedU64, buffer::Buffer},
     sync::cell::UnsafeCell,
 };
 
-pub(crate) type IndexStorage = ItemHandle<()>;
 pub(crate) type DataStorage<T> = UnsafeCell<Option<T>>;
 
-struct Pool<T, DataBuf, Q> {
+struct Pool<T, DataBuf, S> {
     data: DataBuf,
-    free_slots: Q,
+    free_slots: S,
     _phantom: PhantomData<T>,
 }
 
-impl<T, DataBuf, Q> Pool<T, DataBuf, Q>
+impl<T, DataBuf, S> Pool<T, DataBuf, S>
 where
-    Q: MPMCQueue<Item = IndexStorage>,
+    DataBuf: Buffer<Slot = DataStorage<T>>,
+    S: StorageData,
 {
     #[track_caller]
-    fn new(data_buf: DataBuf, index_queue: Q) -> Self {
-        let cap = index_queue.capacity();
-        for i in 0..cap {
-            _ = index_queue.push(ItemHandle::new(OwnedIdx::new(i)));
-        }
+    fn new(data_buf: DataBuf, slot_storage: S) -> Self {
+        debug_assert!(
+            slot_storage.capacity() >= data_buf.capacity(),
+            "Slot storage capacity ({}) must be >= data buffer capacity ({})",
+            slot_storage.capacity(),
+            data_buf.capacity()
+        );
 
         Self {
             data: data_buf,
-            free_slots: index_queue,
+            free_slots: slot_storage,
             _phantom: PhantomData,
         }
     }
 }
 
-impl<T, DataBuf, Q> Pool<T, DataBuf, Q>
+impl<T, DataBuf, S> Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    Q: MPMCQueue<Item = IndexStorage>,
+    S: RawStorage,
 {
     fn allocate(&self, item: T) -> Result<OwnedIdx, T> {
-        let next_free = self.free_slots.pop();
-        if next_free.is_none() {
+        let Some(idx) = self.free_slots.pull_raw() else {
             return Err(item);
-        }
-        let next_free = next_free.unwrap().idx;
+        };
+
         let cell = self
             .data
             .inner()
-            .get(next_free.idx)
-            .expect("popped an invalid index from self.free_slots. This is a bug.");
+            .get(idx)
+            .expect("Popped an invalid index from self.free_slots. This is a bug.");
+
         // SAFETY:
-        // Each index in the Index queue is unique exists as only one instance. If we own this Index, no other thread has it
+        // Each index in the slot storage is unique and returned to at most one caller at a time.
+        // If we own this index, no other thread is concurrently writing to or reading from this cell.
         cell.with_mut(|c| unsafe { &mut *c }.replace(item));
-        Ok(next_free)
+        Ok(OwnedIdx::new(idx))
     }
 
     fn deallocate(&self, idx: OwnedIdx) -> Option<T> {
         let slot = self.data.inner().get(idx.idx)?;
+
         // SAFETY:
-        // Each index in the Index queue is unique exists as only one instance. If we own this Index, no other thread has it
+        // Exclusive access to this slot index is guaranteed by owning `idx`.
         let item = slot.with_mut(|c| unsafe { &mut *c }.take());
-        _ = self.free_slots.push(ItemHandle::new(idx));
+
+        // SAFETY:
+        // `idx.idx` was originally produced by `pull_raw` on this pool's storage instance.
+        unsafe {
+            self.free_slots.put_raw(idx.idx);
+        }
+
         item
     }
 }
 
 // SAFETY:
-// Pool stores items of type T.
-// It uses a MPMCQueue to ensure thread-safety
-unsafe impl<T, DataBuf, Q> Send for Pool<T, DataBuf, Q>
+// Pool manages items of type T and delegates thread-safe allocation to S: RawStorage + Sync.
+unsafe impl<T, DataBuf, S> Send for Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    Q: MPMCQueue<Item = IndexStorage>,
+    S: RawStorage + Sync,
     T: Send,
 {
 }
+
 // SAFETY:
-// Pool stores items of type T.
-// It uses a MPMCQueue to ensure thread-safety
-unsafe impl<T, DataBuf, Q> Sync for Pool<T, DataBuf, Q>
+// Pool manages items of type T and delegates thread-safe allocation to S: RawStorage + Sync.
+unsafe impl<T, DataBuf, S> Sync for Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    Q: MPMCQueue<Item = IndexStorage>,
+    S: RawStorage + Sync,
     T: Sync,
 {
 }
@@ -119,16 +130,14 @@ impl<T> ItemHandle<T> {
 }
 
 // SAFETY:
-// the caller must ensure that:
-// - the index stored in ItemHandle<T> uses at most 48 bits, if stored in a TaggedPtr64
+// The caller must ensure that index stored in ItemHandle<T> uses at most 48 bits.
 unsafe impl<T> AsPackedValue for ItemHandle<T> {
     const MIN_BIT_WIDTH: usize = 48;
 
     fn encode(zelf: Self) -> TruncatedU64<Self> {
         debug_assert!(
-            zelf.idx.idx <= 2_usize.pow(48),
-            "Used an ItemHandle with an incompatible index. This either means misuse of the API,
-            or that the capacity of the used pool is too high. The capacity of the pool should not exceed 2^48."
+            zelf.idx.idx <= (1_usize << 48),
+            "Used an ItemHandle with an incompatible index exceeding 2^48."
         );
         TruncatedU64::new(zelf.idx() as u64)
     }
@@ -142,42 +151,41 @@ unsafe impl<T> AsPackedValue for ItemHandle<T> {
     }
 }
 
-pub(crate) struct Pooled<T, Q, DataBuf, IndexQ> {
+pub(crate) struct Pooled<T, Q, DataBuf, S> {
     q: Q,
-    pool: Pool<T, DataBuf, IndexQ>,
+    pool: Pool<T, DataBuf, S>,
 }
 
-impl<T, Q, DataBuf, IndexQ> Pooled<T, Q, DataBuf, IndexQ>
+impl<T, Q, DataBuf, S> Pooled<T, Q, DataBuf, S>
 where
-    IndexQ: MPMCQueue<Item = IndexStorage>,
+    DataBuf: Buffer<Slot = DataStorage<T>>,
+    S: StorageData,
 {
     #[track_caller]
-    pub(crate) fn new_from(queue: Q, data_buf: DataBuf, idx_buf: IndexQ) -> Self {
+    pub(crate) fn new_from(queue: Q, data_buf: DataBuf, slot_storage: S) -> Self {
         Self {
             q: queue,
-            pool: Pool::new(data_buf, idx_buf),
+            pool: Pool::new(data_buf, slot_storage),
         }
     }
 }
 
-// TODO could reuse the allocation of a popped item in force_push instead of reallocating
-impl<T, Q, DataBuf, IndexQ> MPMCQueue for Pooled<T, Q, DataBuf, IndexQ>
+impl<T, Q, DataBuf, S> MPMCQueue for Pooled<T, Q, DataBuf, S>
 where
     Q: MPMCQueue<Item = ItemHandle<T>>,
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    IndexQ: MPMCQueue<Item = IndexStorage>,
+    S: RawStorage + StorageData,
 {
     type Item = T;
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
         let idx = self.pool.allocate(item)?;
         let handle = ItemHandle::new(idx);
-        // this could fail if cap of pool > cap of queue
-        // In practice this will never happen, as the cap of the pool == the cap of the queue, if constructed via the public API
+
         self.q.push(handle).map_err(|handle| {
             self.pool
                 .deallocate(handle.idx)
-                .expect("Wrong index handed to Pool::dellocate. This is a bug.")
+                .expect("Wrong index handed to Pool::deallocate. This is a bug.")
         })
     }
 
@@ -197,20 +205,21 @@ where
 
 #[cfg(feature = "dynamic")]
 mod growable {
+    use lf_slots::HeapStorage;
+
     use super::*;
     use crate::growable::NewSized;
 
-    impl<T, Q, DataBuf, IndexQ> NewSized for Pooled<T, Q, DataBuf, IndexQ>
+    impl<T, Q, DataBuf> NewSized for Pooled<T, Q, DataBuf, HeapStorage>
     where
         Q: MPMCQueue<Item = ItemHandle<T>> + NewSized,
         DataBuf: Buffer<Slot = DataStorage<T>> + NewSized,
-        IndexQ: MPMCQueue<Item = IndexStorage> + NewSized,
     {
         fn with_size(size: usize) -> Self {
             Self::new_from(
                 Q::with_size(size),
                 DataBuf::with_size(size),
-                IndexQ::with_size(size),
+                HeapStorage::new(size),
             )
         }
     }

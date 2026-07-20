@@ -59,9 +59,9 @@ cfg_atomic_tagged64! {
         #[test]
         fn len_impl() {
             #[cfg(miri)]
-            const CAP: usize = 40;
+            const CAP: usize = 32;
             #[cfg(not(miri))]
-            const CAP: usize = 1000;
+            const CAP: usize = 1024;
 
             let q: QueueCore<BoxedBuffer<Tagged64<_>>> = QueueCore::new_in(BoxedBuffer::new(CAP));
             len(q);
@@ -156,9 +156,9 @@ cfg_atomic_tagged128! {
         #[test]
         fn len_impl() {
             #[cfg(miri)]
-            const CAP: usize = 40;
+            const CAP: usize = 32;
             #[cfg(not(miri))]
-            const CAP: usize = 1000;
+            const CAP: usize = 1024;
 
             let q: QueueCore<BoxedBuffer<Tagged128<_>>> = QueueCore::new_in(BoxedBuffer::new(CAP));
             len(q);
@@ -227,7 +227,7 @@ mod pool {
 
     #[test]
     fn smoke_long_impl() {
-        let q: PooledStaticQueue<_, 10> = PooledStaticQueue::default();
+        let q: PooledStaticQueue<_, 8> = PooledStaticQueue::default();
         smoke_long(q);
     }
 
@@ -251,9 +251,9 @@ mod pool {
     #[test]
     fn len_impl() {
         #[cfg(miri)]
-        const CAP: usize = 40;
+        const CAP: usize = 32;
         #[cfg(not(miri))]
-        const CAP: usize = 1000;
+        const CAP: usize = 1024;
 
         let q: PooledStaticQueue<_, CAP> = PooledStaticQueue::default();
         len(q);
@@ -261,25 +261,25 @@ mod pool {
 
     #[test]
     fn spsc_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
         spsc(q);
     }
 
     #[test]
     fn mpsc_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
         mpsc(q);
     }
 
     #[test]
     fn mpmc_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
         mpmc(q);
     }
 
     #[test]
     fn mpmc_ring_buffer_impl() {
-        let q: PooledStaticQueue<_, 3> = PooledStaticQueue::default();
+        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
         mpmc_ring_buffer(q);
     }
 
@@ -297,7 +297,7 @@ mod pool {
 
     #[test]
     fn pooled_stores_any_impl() {
-        let q: PooledStaticQueue<_, 1> = PooledStaticQueue::default();
+        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
         pooled_stores_any(q);
     }
 }
@@ -493,9 +493,9 @@ mod growable {
     #[test]
     fn len_impl() {
         #[cfg(miri)]
-        const CAP: usize = 40;
+        const CAP: usize = 32;
         #[cfg(not(miri))]
-        const CAP: usize = 1000;
+        const CAP: usize = 1024;
 
         let q: DynamicQueue<_> = DynamicQueue::new(CAP);
         len(q);
@@ -575,9 +575,9 @@ mod growable {
     #[test]
     fn len_grow_impl() {
         #[cfg(miri)]
-        const CAP: usize = 40;
+        const CAP: usize = 32;
         #[cfg(not(miri))]
-        const CAP: usize = 500;
+        const CAP: usize = 512;
         let q = DynamicQueue::new(CAP);
         len_grow(q);
     }
@@ -678,9 +678,9 @@ mod growable {
         #[test]
         fn len_grow_impl() {
             #[cfg(miri)]
-            const CAP: usize = 40;
+            const CAP: usize = 32;
             #[cfg(not(miri))]
-            const CAP: usize = 500;
+            const CAP: usize = 512;
             let q = PooledDynamicQueue::new(CAP);
             len_grow(q);
         }

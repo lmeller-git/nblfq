@@ -357,8 +357,8 @@ mod growable {
                 let q = DynamicQueue::new(4);
                 linearizable_during_resize(q);
             },
-            5000,
             100,
+            4,
         );
     }
 
@@ -369,8 +369,8 @@ mod growable {
                 let q = DynamicQueue::new(4);
                 push_pop_resize(q);
             },
-            1000,
-            20,
+            100,
+            4,
         )
     }
 

@@ -73,3 +73,36 @@ pub mod slots {
         compile_error!("target arch is currently not supported");
     }
 }
+
+#[cfg(feature = "pool")]
+pub mod pool_storage {
+    use lf_slots::{RawStorage, StorageData};
+
+    pub trait InlineSlotStore<const N: usize> {
+        type Storage: RawStorage + StorageData + Default;
+    }
+
+    macro_rules! impl_inline_slot_store {
+        ($($n:expr),* $(,)?) => {
+            $(
+                impl InlineSlotStore<$n> for super::slots::Auto {
+                    type Storage = lf_slots::core::InlineStorage<$n, { lf_slots::core::full_shard_count($n) }>;
+                }
+            )*
+        };
+    }
+
+    impl_inline_slot_store!(
+        2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536
+    );
+
+    #[macro_export]
+    macro_rules! impl_pool_capacity {
+        ($name:ident, $n:expr) => {
+            pub struct $name;
+            impl $crate::InlineSlotStore<$n> for $name {
+                type Storage = lf_slots::core::InlineStorage<$n, { lf_slots::core::full_shard_count($n, 512) };
+            }
+        };
+    }
+}

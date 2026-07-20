@@ -116,9 +116,9 @@ where
     #[cfg(not(any(miri, loom, shuttle)))]
     const COUNT: usize = 25_000;
     #[cfg(any(miri, loom, shuttle))]
-    const CAP: usize = 40;
+    const CAP: usize = 32;
     #[cfg(not(any(miri, loom, shuttle)))]
-    const CAP: usize = 1000;
+    const CAP: usize = 1024;
     const ITERS: usize = CAP / 20;
 
     assert_eq!(q.len(), 0);
@@ -822,9 +822,9 @@ mod growth {
         #[cfg(not(any(miri, loom, shuttle)))]
         const COUNT: usize = 20_000;
         #[cfg(any(miri, loom, shuttle))]
-        const CAP: usize = 40;
+        const CAP: usize = 32;
         #[cfg(not(any(miri, loom, shuttle)))]
-        const CAP: usize = 500;
+        const CAP: usize = 512;
         const ITERS: usize = CAP / 20;
 
         assert_eq!(q.len(), 0);
