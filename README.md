@@ -19,7 +19,7 @@ Most variants are strictly non-blocking and will never block the calling thread,
 
 ## Queue variants
 
-- **Static queues**: fixed-capacity queues backed by static storage.
+- **Inline queues**: fixed-capacity queues backed by static storage.
 - **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on feature `alloc`.
 - **Dynamic queues**: dynamically resizeable queues, only available on feature `dynamic`.
 - **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`.
@@ -29,14 +29,14 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 ## Usage
 
-`nblf_queue::StaticQueue`:
+`nblf_queue::InlineQueue`:
 
 ```rust
   #[cfg(feature = "unsafe-ptr48")]
   fn run() {
-    use nblf_queue::{StaticQueue, MPMCQueue};
+    use nblf_queue::{InlineQueue, MPMCQueue};
 
-    let q: StaticQueue<_, 2> = StaticQueue::new();
+    let q: InlineQueue<_, 2> = InlineQueue::new();
 
     assert!(q.push(&42).is_ok());
     assert!(q.push(&1).is_ok());
@@ -52,14 +52,14 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 ```
 
 
-`nblf_queue::PooledStaticQueue`:
+`nblf_queue::PooledInlineQueue`:
 
 ```rust
   #[cfg(feature = "pool")]
   fn run() {
-    use nblf_queue::{PooledStaticQueue, MPMCQueue};
+    use nblf_queue::{PooledInlineQueue, MPMCQueue};
 
-    let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
+    let q: PooledInlineQueue<_, 2> = PooledInlineQueue::new();
 
     assert!(q.push(42).is_ok());
     assert!(q.push(1).is_ok());
@@ -107,9 +107,9 @@ Do you have an allocator? -> Use a non-static Queue.
 Do you want to send large owned items? -> Use `Pooled*`.
 Do you want to resize your queue? -> Use `Dynamic*`.
 
-- `StaticQueue` and `Queue`: may only store small values and are optimized for this use case.
+- `InlineQueue` and `Queue`: may only store small values and are optimized for this use case.
 
-- `PooledStaticQueue` and `PooledQueue`: may store arbitrary types, at the cost slightly higher memory usage and runtime cost.
+- `PooledInlineQueue` and `PooledQueue`: may store arbitrary types, at the cost slightly higher memory usage and runtime cost.
 
 - `DynamicQueue` and `PooledDynamicQueue`: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
 

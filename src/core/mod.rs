@@ -76,25 +76,25 @@ pub mod slots {
 
 #[cfg(feature = "pool")]
 #[macro_use]
-pub mod pool_storage {
+pub mod inline_pool_storage {
     //! This module contains functionality to declare statically sized pools.
 
-    use lf_slots::{RawStorage, StorageData};
+    use lf_slots::{RawSlotPool, SlotPoolMeta};
 
     use crate::core::{AsPackedValue, slots::SlotType};
 
-    /// The type of slot storage and slot associated with some marker type.
+    /// The type of slot pool and queue slot associated with some marker type.
     ///
-    /// The slot storage implements the traits
-    /// `RawStorage`, `StorageData` and `Default` from the crate `lf-slots`.
+    /// The slot pool implements the traits
+    /// `RawSlotPool`, `SlotPoolMeta` and `Default` from the crate `lf-slots`.
     ///
     /// The slot implements the trait `SlotType` as declared in `nblf_queue::core::slots::SlotType`.
     pub trait InlineSlotStore<T: AsPackedValue, const N: usize> {
-        /// The Storage type associated with this type.
+        /// The slot pool type associated with this type.
         ///
-        /// The storage is used to distribute space for items.
-        type Storage: RawStorage + StorageData + Default;
-        /// The slot type associate with this type.
+        /// The index pool is used to distribute space for items.
+        type Pool: RawSlotPool + SlotPoolMeta + Default;
+        /// The queue slot type associate with this type.
         type SlotType: SlotType<T>;
     }
 
@@ -102,7 +102,7 @@ pub mod pool_storage {
         ($($n:expr),* $(,)?) => {
             $(
                 impl<T: $crate::core::AsPackedValue> InlineSlotStore<T, $n> for $crate::core::slots::Auto {
-                    type Storage = lf_slots::core::InlineStorage<$n, { lf_slots::core::full_shard_count($n) }>;
+                    type Pool = lf_slots::InlineSlots<$n, { lf_slots::core::full_shard_count($n) }>;
                     type SlotType = $crate::core::slots::Auto;
                 }
             )*
@@ -118,27 +118,26 @@ pub mod pool_storage {
     /// Usage:
     ///
     /// ```rust
-    /// use nblf_queue::{impl_pool_capacity, PooledStaticQueue};
+    /// use nblf_queue::{impl_pool_capacity, PooledInlineQueue};
     ///
     /// impl_pool_capacity!(Storage42, 42);
     ///
-    /// _ = PooledStaticQueue::new();
+    /// _ = PooledInlineQueue::<(), 42, Storage42>::with_conf();
     ///
     /// ```
     #[macro_export]
     macro_rules! impl_pool_capacity {
-        ($name:ident, $n:expr, $slot:path) => {
-            pub struct $name;
-            impl<T: $crate::core::AsPackedValue> $crate::core::pool_storage::InlineSlotStore<T, $n>
-                for $name
+        ($vis:vis $name:ident, $n:expr, $slot:path) => {
+            $vis struct $name;
+            impl<T: $crate::core::AsPackedValue>
+                $crate::core::inline_pool_storage::InlineSlotStore<T, $n> for $name
             {
                 type SlotType = $slot;
-                type Storage =
-                    lf_slots::core::InlineStorage<$n, { lf_slots::core::full_shard_count($n) }>;
+                type Pool = lf_slots::InlineSlots<$n, { lf_slots::core::full_shard_count($n) }>;
             }
         };
-        ($name:ident, $n:expr) => {
-            $crate::impl_pool_capacity!($name, $n, $crate::core::slots::Auto)
+        ($vis:vis $name:ident, $n:expr) => {
+            $crate::impl_pool_capacity!($vis $name, $n, $crate::core::slots::Auto)
         };
     }
 }

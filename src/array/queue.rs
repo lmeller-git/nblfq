@@ -16,7 +16,7 @@ use crate::{
 /// This queue only accepts items that implememt `PtrLike`.
 ///
 /// If you need to store larger types, consider using `PooledStaticQueue` instead.
-pub struct StaticQueue<T, const N: usize, S = Auto>
+pub struct InlineQueue<T, const N: usize, S = Auto>
 where
     T: AsPackedValue,
     S: SlotType<T>,
@@ -24,7 +24,7 @@ where
     inner: QueueCore<ArrayBuf<N, S::Slot>>,
 }
 
-impl<T, const N: usize> StaticQueue<T, N, Auto>
+impl<T, const N: usize> InlineQueue<T, N, Auto>
 where
     T: AsPackedValue,
 {
@@ -38,17 +38,17 @@ where
     /// Constructs a new `StaticQueue` with slot type `S`.
     /// `T` must fit into the slot type `S`
     #[track_caller]
-    pub fn with_slot<S>() -> StaticQueue<T, N, S>
+    pub fn with_slot<S>() -> InlineQueue<T, N, S>
     where
         S: SlotType<T>,
     {
-        StaticQueue {
+        InlineQueue {
             inner: QueueCore::new_in(ArrayBuf::new()),
         }
     }
 }
 
-impl<T, const N: usize, S> MPMCQueue for StaticQueue<T, N, S>
+impl<T, const N: usize, S> MPMCQueue for InlineQueue<T, N, S>
 where
     T: AsPackedValue,
     S: SlotType<T>,
@@ -72,7 +72,7 @@ where
     }
 }
 
-impl<T, const N: usize> Default for StaticQueue<T, N, Auto>
+impl<T, const N: usize> Default for InlineQueue<T, N, Auto>
 where
     T: AsPackedValue,
 {
@@ -86,7 +86,7 @@ where
 mod pooled_static {
     use super::*;
     use crate::{
-        core::pool_storage::InlineSlotStore,
+        core::inline_pool_storage::InlineSlotStore,
         pool::{DataStorage, ItemHandle, Pooled},
     };
 
@@ -98,50 +98,50 @@ mod pooled_static {
     ///
     /// For more info refer to `StaticQueue`.
     #[allow(private_bounds)]
-    pub struct PooledStaticQueue<T, const N: usize, S = Auto>
+    pub struct PooledInlineQueue<T, const N: usize, S = Auto>
     where
         S: InlineSlotStore<ItemHandle<T>, N>,
     {
         #[allow(clippy::type_complexity)]
         inner: Pooled<
             T,
-            StaticQueue<ItemHandle<T>, N, S::SlotType>,
+            InlineQueue<ItemHandle<T>, N, S::SlotType>,
             ArrayBuf<N, DataStorage<T>>,
-            S::Storage,
+            S::Pool,
         >,
     }
 
     #[allow(private_bounds)]
-    impl<T, const N: usize> PooledStaticQueue<T, N, Auto>
+    impl<T, const N: usize> PooledInlineQueue<T, N, Auto>
     where
         Auto: InlineSlotStore<ItemHandle<T>, N>,
     {
         /// Constructs a new `PooledStaticQueue` with slot type `Auto`
         #[track_caller]
         pub fn new() -> Self {
-            Self::with_storage()
+            Self::with_conf()
         }
     }
 
     #[allow(private_bounds)]
-    impl<T, const N: usize, S> PooledStaticQueue<T, N, S>
+    impl<T, const N: usize, S> PooledInlineQueue<T, N, S>
     where
         S: InlineSlotStore<ItemHandle<T>, N>,
     {
         /// Constructs a new `PooledStaticQueue` with slot type `S::SlotType` and storage type `S::Storage`.
         #[track_caller]
-        pub fn with_storage() -> PooledStaticQueue<T, N, S> {
-            PooledStaticQueue {
+        pub fn with_conf() -> PooledInlineQueue<T, N, S> {
+            PooledInlineQueue {
                 inner: Pooled::new_from(
-                    StaticQueue::with_slot(),
+                    InlineQueue::with_slot(),
                     ArrayBuf::new(),
-                    S::Storage::default(),
+                    S::Pool::default(),
                 ),
             }
         }
     }
 
-    impl<T, const N: usize, S> MPMCQueue for PooledStaticQueue<T, N, S>
+    impl<T, const N: usize, S> MPMCQueue for PooledInlineQueue<T, N, S>
     where
         S: InlineSlotStore<ItemHandle<T>, N>,
     {
@@ -164,7 +164,7 @@ mod pooled_static {
         }
     }
 
-    impl<T, const N: usize> Default for PooledStaticQueue<T, N, Auto>
+    impl<T, const N: usize> Default for PooledInlineQueue<T, N, Auto>
     where
         Auto: InlineSlotStore<ItemHandle<T>, N>,
     {

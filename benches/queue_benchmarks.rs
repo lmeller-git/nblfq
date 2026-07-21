@@ -15,15 +15,15 @@ use crossbeam_queue::SegQueue;
 use nblf_queue::DynamicQueue;
 #[cfg(all(feature = "dynamic", feature = "pool"))]
 use nblf_queue::PooledDynamicQueue;
+#[cfg(feature = "pool")]
+use nblf_queue::PooledInlineQueue;
 #[cfg(all(feature = "alloc", feature = "pool"))]
 use nblf_queue::PooledQueue;
-#[cfg(feature = "pool")]
-use nblf_queue::PooledStaticQueue;
 #[cfg(feature = "alloc")]
 use nblf_queue::Queue;
 #[cfg(feature = "dynamic")]
 use nblf_queue::Resize;
-use nblf_queue::{MPMCQueue, StaticQueue};
+use nblf_queue::{InlineQueue, MPMCQueue};
 
 #[cfg(all(bench_crossbeam, feature = "alloc"))]
 mod crossbeam_ {
@@ -292,7 +292,7 @@ fn bench_throughput_spsc(c: &mut Criterion) {
         group.throughput(criterion::Throughput::Elements(*size as u64));
 
         group.bench_with_input(format!("StaticQueue | size={size}"), &input, |b, i| {
-            b.iter(|| simple_sender::<StaticQueue<_, 64>>(StaticQueue::new(), i));
+            b.iter(|| simple_sender::<InlineQueue<_, 64>>(InlineQueue::new(), i));
         });
 
         #[cfg(feature = "dynamic")]
@@ -305,7 +305,7 @@ fn bench_throughput_spsc(c: &mut Criterion) {
             format!("PooledStaticQueue | size={size}"),
             &input,
             |b, i| {
-                b.iter(|| simple_sender::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new(), i));
+                b.iter(|| simple_sender::<PooledInlineQueue<_, 64>>(PooledInlineQueue::new(), i));
             },
         );
 
@@ -334,7 +334,7 @@ fn bench_throughput_mpsc(c: &mut Criterion) {
     group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
     group.bench_function("StaticQueue", |b| {
-        b.iter(|| run_queue_mpsc::<StaticQueue<_, 64>>(StaticQueue::new()));
+        b.iter(|| run_queue_mpsc::<InlineQueue<_, 64>>(InlineQueue::new()));
     });
 
     #[cfg(feature = "dynamic")]
@@ -344,7 +344,7 @@ fn bench_throughput_mpsc(c: &mut Criterion) {
 
     #[cfg(feature = "pool")]
     group.bench_function("PooledStaticQueue", |b| {
-        b.iter(|| run_queue_mpsc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()));
+        b.iter(|| run_queue_mpsc::<PooledInlineQueue<_, 64>>(PooledInlineQueue::new()));
     });
 
     #[cfg(all(feature = "dynamic", feature = "pool"))]
@@ -365,7 +365,7 @@ fn bench_throughput_mpmc(c: &mut Criterion) {
     group.throughput(criterion::Throughput::Elements(TOTAL_ITEMS));
 
     group.bench_function("simple throughput static queue", |b| {
-        b.iter(|| run_queue_mpmc::<StaticQueue<_, 64>>(StaticQueue::new()));
+        b.iter(|| run_queue_mpmc::<InlineQueue<_, 64>>(InlineQueue::new()));
     });
 
     #[cfg(feature = "dynamic")]
@@ -375,7 +375,7 @@ fn bench_throughput_mpmc(c: &mut Criterion) {
 
     #[cfg(feature = "pool")]
     group.bench_function("simple throughput pooled static queue", |b| {
-        b.iter(|| run_queue_mpmc::<PooledStaticQueue<_, 64>>(PooledStaticQueue::new()));
+        b.iter(|| run_queue_mpmc::<PooledInlineQueue<_, 64>>(PooledInlineQueue::new()));
     });
 
     #[cfg(all(feature = "dynamic", feature = "pool"))]
@@ -428,7 +428,7 @@ fn bench_throughput_mpmc_cap(c: &mut Criterion) {
 fn bench_push_pop(c: &mut Criterion) {
     let mut group = c.benchmark_group("push pop single thread");
     group.bench_function("StaticQueue", |b| {
-        b.iter(|| run_queue_single_thread::<StaticQueue<_, 2>>(StaticQueue::new()));
+        b.iter(|| run_queue_single_thread::<InlineQueue<_, 2>>(InlineQueue::new()));
     });
 
     #[cfg(feature = "dynamic")]
@@ -438,7 +438,7 @@ fn bench_push_pop(c: &mut Criterion) {
 
     #[cfg(feature = "pool")]
     group.bench_function("PooledStaticQueue", |b| {
-        b.iter(|| run_queue_single_thread::<PooledStaticQueue<_, 2>>(PooledStaticQueue::new()));
+        b.iter(|| run_queue_single_thread::<PooledInlineQueue<_, 2>>(PooledInlineQueue::new()));
     });
 
     #[cfg(all(feature = "dynamic", feature = "pool"))]

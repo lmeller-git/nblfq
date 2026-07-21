@@ -435,7 +435,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 [[package]]
 name = "lf-slots"
 version = "0.1.0"
-source = "git+https://github.com/lmeller-git/lf-slots#c6eea441009e97b69e8572e4ee2e2cabf20a0799"
+source = "git+https://github.com/lmeller-git/lf-slots#1f55e4132acb76da29ebd3fec67c0819607e2760"
 dependencies = [
  "crossbeam-utils",
  "echeneis",

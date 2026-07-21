@@ -1,6 +1,6 @@
 use core::{fmt::Debug, marker::PhantomData};
 
-use lf_slots::{RawStorage, StorageData};
+use lf_slots::{RawSlotPool, SlotPoolMeta};
 
 use crate::{
     MPMCQueue,
@@ -19,7 +19,7 @@ struct Pool<T, DataBuf, S> {
 impl<T, DataBuf, S> Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    S: StorageData,
+    S: SlotPoolMeta,
 {
     #[track_caller]
     fn new(data_buf: DataBuf, slot_storage: S) -> Self {
@@ -41,7 +41,7 @@ where
 impl<T, DataBuf, S> Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    S: RawStorage,
+    S: RawSlotPool,
 {
     fn allocate(&self, item: T) -> Result<OwnedIdx, T> {
         let Some(idx) = self.free_slots.pull_raw() else {
@@ -79,21 +79,21 @@ where
 }
 
 // SAFETY:
-// Pool manages items of type T and delegates thread-safe allocation to S: RawStorage + Sync.
+// Pool manages items of type T and delegates thread-safe allocation to S: RawSlotPool + Sync.
 unsafe impl<T, DataBuf, S> Send for Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    S: RawStorage + Sync,
+    S: RawSlotPool + Sync,
     T: Send,
 {
 }
 
 // SAFETY:
-// Pool manages items of type T and delegates thread-safe allocation to S: RawStorage + Sync.
+// Pool manages items of type T and delegates thread-safe allocation to S: RawSlotPool + Sync.
 unsafe impl<T, DataBuf, S> Sync for Pool<T, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    S: RawStorage + Sync,
+    S: RawSlotPool + Sync,
     T: Sync,
 {
 }
@@ -159,7 +159,7 @@ pub(crate) struct Pooled<T, Q, DataBuf, S> {
 impl<T, Q, DataBuf, S> Pooled<T, Q, DataBuf, S>
 where
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    S: StorageData,
+    S: SlotPoolMeta,
 {
     #[track_caller]
     pub(crate) fn new_from(queue: Q, data_buf: DataBuf, slot_storage: S) -> Self {
@@ -174,7 +174,7 @@ impl<T, Q, DataBuf, S> MPMCQueue for Pooled<T, Q, DataBuf, S>
 where
     Q: MPMCQueue<Item = ItemHandle<T>>,
     DataBuf: Buffer<Slot = DataStorage<T>>,
-    S: RawStorage + StorageData,
+    S: RawSlotPool + SlotPoolMeta,
 {
     type Item = T;
 
@@ -205,12 +205,12 @@ where
 
 #[cfg(feature = "dynamic")]
 mod growable {
-    use lf_slots::HeapStorage;
+    use lf_slots::Slots;
 
     use super::*;
     use crate::growable::NewSized;
 
-    impl<T, Q, DataBuf> NewSized for Pooled<T, Q, DataBuf, HeapStorage>
+    impl<T, Q, DataBuf> NewSized for Pooled<T, Q, DataBuf, Slots>
     where
         Q: MPMCQueue<Item = ItemHandle<T>> + NewSized,
         DataBuf: Buffer<Slot = DataStorage<T>> + NewSized,
@@ -219,7 +219,7 @@ mod growable {
             Self::new_from(
                 Q::with_size(size),
                 DataBuf::with_size(size),
-                HeapStorage::new(size),
+                Slots::new(size),
             )
         }
     }

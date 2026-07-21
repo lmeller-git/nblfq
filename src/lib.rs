@@ -25,9 +25,9 @@ mod sync;
 #[cfg(test)]
 mod tests;
 
+pub use array::InlineQueue;
 #[cfg(feature = "pool")]
-pub use array::PooledStaticQueue;
-pub use array::StaticQueue;
+pub use array::PooledInlineQueue;
 #[cfg(feature = "dynamic")]
 pub use growable::DynamicQueue;
 #[cfg(all(feature = "dynamic", feature = "pool"))]
@@ -44,9 +44,9 @@ pub use owned::Queue;
 /// # Examples
 ///
 /// ```rust
-/// use nblf_queue::{StaticQueue, MPMCQueue};
+/// use nblf_queue::{InlineQueue, MPMCQueue};
 ///
-/// let q: StaticQueue<_, 2> = StaticQueue::new();
+/// let q: InlineQueue<_, 2> = InlineQueue::new();
 ///
 /// assert!(q.push(42).is_ok());
 /// assert!(q.push(2).is_ok());
@@ -72,9 +72,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// assert!(q.push(10).is_ok());
     /// assert!(q.push(20).is_ok());
@@ -88,9 +88,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// assert!(q.push(10).is_ok());
     /// assert!(q.push(42).is_ok());
@@ -129,9 +129,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// assert!(q.force_push(10).is_none());
     /// assert!(q.force_push(20).is_none());
@@ -158,9 +158,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// q.force_push_and_do(10, |item| {});
     /// q.force_push_and_do(20, |item| {});

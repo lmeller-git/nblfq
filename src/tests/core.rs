@@ -217,11 +217,11 @@ cfg_atomic_tagged128! {
 #[cfg(feature = "pool")]
 mod pool {
     use super::*;
-    use crate::{array::PooledStaticQueue, tests::test_library::pooled_stores_any};
+    use crate::{array::PooledInlineQueue, tests::test_library::pooled_stores_any};
 
     #[test]
     fn smoke_impl() {
-        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 2> = PooledInlineQueue::default();
         smoke(q);
     }
 
@@ -229,13 +229,13 @@ mod pool {
     fn smoke_long_impl() {
         crate::impl_pool_capacity!(Storage10, 10);
 
-        let q: PooledStaticQueue<_, 10, Storage10> = PooledStaticQueue::with_storage();
+        let q: PooledInlineQueue<_, 10, Storage10> = PooledInlineQueue::with_conf();
         smoke_long(q);
     }
 
     #[test]
     fn len_empty_full_impl() {
-        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 2> = PooledInlineQueue::default();
         len_empty_full(q);
     }
 
@@ -246,7 +246,7 @@ mod pool {
     ))]
     #[test]
     fn drops_impl() {
-        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 2> = PooledInlineQueue::default();
         drops(q);
     }
 
@@ -257,78 +257,78 @@ mod pool {
         #[cfg(not(miri))]
         const CAP: usize = 1024;
 
-        let q: PooledStaticQueue<_, CAP> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, CAP> = PooledInlineQueue::default();
         len(q);
     }
 
     #[test]
     fn spsc_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 4> = PooledInlineQueue::default();
         spsc(q);
     }
 
     #[test]
     fn mpsc_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 4> = PooledInlineQueue::default();
         mpsc(q);
     }
 
     #[test]
     fn mpmc_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 4> = PooledInlineQueue::default();
         mpmc(q);
     }
 
     #[test]
     fn mpmc_ring_buffer_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 4> = PooledInlineQueue::default();
         mpmc_ring_buffer(q);
     }
 
     #[test]
     fn linearizable_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 4> = PooledInlineQueue::default();
         linearizable(q);
     }
 
     #[test]
     fn force_push_impl() {
-        let q: PooledStaticQueue<_, 4> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 4> = PooledInlineQueue::default();
         force_push(q);
     }
 
     #[test]
     fn pooled_stores_any_impl() {
-        let q: PooledStaticQueue<_, 2> = PooledStaticQueue::default();
+        let q: PooledInlineQueue<_, 2> = PooledInlineQueue::default();
         pooled_stores_any(q);
     }
 }
 
 mod array {
     use super::*;
-    use crate::array::StaticQueue;
+    use crate::array::InlineQueue;
 
     #[test]
     fn smoke_impl() {
-        let q: StaticQueue<_, 2> = StaticQueue::default();
+        let q: InlineQueue<_, 2> = InlineQueue::default();
         smoke(q);
     }
 
     #[test]
     fn smoke_long_impl() {
-        let q: StaticQueue<_, 10> = StaticQueue::default();
+        let q: InlineQueue<_, 10> = InlineQueue::default();
         smoke_long(q);
     }
 
     #[test]
     fn len_empty_full_impl() {
-        let q: StaticQueue<_, 2> = StaticQueue::default();
+        let q: InlineQueue<_, 2> = InlineQueue::default();
         len_empty_full(q);
     }
 
     #[test]
     fn force_push_impl() {
-        let q: StaticQueue<_, 2> = StaticQueue::default();
+        let q: InlineQueue<_, 2> = InlineQueue::default();
         force_push(q);
     }
 }
