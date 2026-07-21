@@ -227,7 +227,9 @@ mod pool {
 
     #[test]
     fn smoke_long_impl() {
-        let q: PooledStaticQueue<_, 8> = PooledStaticQueue::default();
+        crate::impl_pool_capacity!(Storage10, 10);
+
+        let q: PooledStaticQueue<_, 10, Storage10> = PooledStaticQueue::with_storage();
         smoke_long(q);
     }
 

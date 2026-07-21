@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 #![deny(clippy::missing_safety_doc, clippy::undocumented_unsafe_blocks)]
 #![warn(unsafe_op_in_unsafe_fn)]
 
@@ -13,6 +13,7 @@ extern crate std;
 #[macro_use]
 pub(crate) mod utils;
 mod array;
+#[macro_use]
 pub mod core;
 #[cfg(feature = "dynamic")]
 mod growable;

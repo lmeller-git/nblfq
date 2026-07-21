@@ -100,31 +100,37 @@ mod pooled_static {
     #[allow(private_bounds)]
     pub struct PooledStaticQueue<T, const N: usize, S = Auto>
     where
-        S: InlineSlotStore<N>,
-        S: SlotType<ItemHandle<T>>,
+        S: InlineSlotStore<ItemHandle<T>, N>,
     {
         #[allow(clippy::type_complexity)]
-        inner: Pooled<T, StaticQueue<ItemHandle<T>, N, S>, ArrayBuf<N, DataStorage<T>>, S::Storage>,
+        inner: Pooled<
+            T,
+            StaticQueue<ItemHandle<T>, N, S::SlotType>,
+            ArrayBuf<N, DataStorage<T>>,
+            S::Storage,
+        >,
     }
 
     #[allow(private_bounds)]
     impl<T, const N: usize> PooledStaticQueue<T, N, Auto>
     where
-        Auto: InlineSlotStore<N>,
+        Auto: InlineSlotStore<ItemHandle<T>, N>,
     {
         /// Constructs a new `PooledStaticQueue` with slot type `Auto`
         #[track_caller]
         pub fn new() -> Self {
-            Self::with_slot::<Auto>()
+            Self::with_storage()
         }
+    }
 
-        /// Constructs a new `PooledStaticQueue` with slot type `S`
+    #[allow(private_bounds)]
+    impl<T, const N: usize, S> PooledStaticQueue<T, N, S>
+    where
+        S: InlineSlotStore<ItemHandle<T>, N>,
+    {
+        /// Constructs a new `PooledStaticQueue` with slot type `S::SlotType` and storage type `S::Storage`.
         #[track_caller]
-        pub fn with_slot<S>() -> PooledStaticQueue<T, N, S>
-        where
-            S: InlineSlotStore<N>,
-            S: SlotType<ItemHandle<T>>,
-        {
+        pub fn with_storage() -> PooledStaticQueue<T, N, S> {
             PooledStaticQueue {
                 inner: Pooled::new_from(
                     StaticQueue::with_slot(),
@@ -137,8 +143,7 @@ mod pooled_static {
 
     impl<T, const N: usize, S> MPMCQueue for PooledStaticQueue<T, N, S>
     where
-        S: SlotType<ItemHandle<T>>,
-        S: InlineSlotStore<N>,
+        S: InlineSlotStore<ItemHandle<T>, N>,
     {
         type Item = T;
 
@@ -161,7 +166,7 @@ mod pooled_static {
 
     impl<T, const N: usize> Default for PooledStaticQueue<T, N, Auto>
     where
-        Auto: InlineSlotStore<N>,
+        Auto: InlineSlotStore<ItemHandle<T>, N>,
     {
         #[track_caller]
         fn default() -> Self {

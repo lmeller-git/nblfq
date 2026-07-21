@@ -109,7 +109,7 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 
 - `StaticQueue` and `Queue`: may only store small values and are optimized for this use case.
 
-- `PooledStaticQueue` and `PooledQueue`: may store arbitrary types, at the cost of higher memory usage and runtime cost.
+- `PooledStaticQueue` and `PooledQueue`: may store arbitrary types, at the cost slightly higher memory usage and runtime cost.
 
 - `DynamicQueue` and `PooledDynamicQueue`: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
 
