@@ -1,6 +1,6 @@
 use core::{fmt::Debug, marker::PhantomData};
 
-use lf_slots::{RawSlotPool, SlotPoolMeta};
+use lf_slots::{SlotPoolMeta, core::RawSlotPool};
 
 use crate::{
     MPMCQueue,

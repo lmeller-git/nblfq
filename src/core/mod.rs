@@ -79,7 +79,7 @@ pub mod slots {
 pub mod inline_pool_storage {
     //! This module contains functionality to declare statically sized pools.
 
-    use lf_slots::{RawSlotPool, SlotPoolMeta};
+    use lf_slots::{SlotPoolMeta, core::RawSlotPool};
 
     use crate::core::{AsPackedValue, slots::SlotType};
 
@@ -102,7 +102,11 @@ pub mod inline_pool_storage {
         ($($n:expr),* $(,)?) => {
             $(
                 impl<T: $crate::core::AsPackedValue> InlineSlotStore<T, $n> for $crate::core::slots::Auto {
-                    type Pool = lf_slots::InlineSlots<$n, { lf_slots::core::full_shard_count($n) }>;
+                    type Pool = lf_slots::InlineSlots<
+                        $n,
+                        { lf_slots::core::shard_count($n) },
+                        { lf_slots::core::words_per_shard($n) }
+                    >;
                     type SlotType = $crate::core::slots::Auto;
                 }
             )*
@@ -133,7 +137,11 @@ pub mod inline_pool_storage {
                 $crate::core::inline_pool_storage::InlineSlotStore<T, $n> for $name
             {
                 type SlotType = $slot;
-                type Pool = lf_slots::InlineSlots<$n, { lf_slots::core::full_shard_count($n) }>;
+                type Pool = lf_slots::InlineSlots<
+                    $n,
+                    { lf_slots::core::shard_count($n) },
+                    { lf_slots::core::words_per_shard($n) }
+                >;
             }
         };
         ($vis:vis $name:ident, $n:expr) => {
