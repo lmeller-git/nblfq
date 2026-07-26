@@ -104,7 +104,7 @@ pub mod inline_pool_storage {
                 impl<T: $crate::core::AsPackedValue> InlineSlotStore<T, $n> for $crate::core::slots::Auto {
                     type Pool = lf_slots::InlineSlots<
                         $n,
-                        { lf_slots::core::shard_count($n) },
+                        { lf_slots::core::shard_count($n, lf_slots::core::words_per_shard($n)) },
                         { lf_slots::core::words_per_shard($n) }
                     >;
                     type SlotType = $crate::core::slots::Auto;
@@ -139,7 +139,7 @@ pub mod inline_pool_storage {
                 type SlotType = $slot;
                 type Pool = lf_slots::InlineSlots<
                     $n,
-                    { lf_slots::core::shard_count($n) },
+                    { lf_slots::core::shard_count($n, lf_slots::core::words_per_shard($n)) },
                     { lf_slots::core::words_per_shard($n) }
                 >;
             }
