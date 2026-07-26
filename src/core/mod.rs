@@ -12,7 +12,7 @@ pub use packed::{AsPackedValue, TruncatedU64};
 
 pub mod slots {
     //! Module containing types used to determine the underlying storage type in nblf-queue Queues.
-    //! In most cases the `Auto` type, which is used as default across this crate, should suffice.
+    //! In most cases the [`Auto`] type, which is used as default across this crate, should suffice.
 
     use super::*;
     use crate::utils::Sealed;
