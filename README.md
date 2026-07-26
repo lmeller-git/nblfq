@@ -10,26 +10,27 @@
 
 > Non-Blocking Lock-Free Queue
 
+<!-- cargo-rdme start -->
+
 An atomic lock-free MPMC queue based on the NBLFQ algorithm.
 
 This repository provides multiple queue implementations with different storage and allocation strategies.
 
 All queues in this repository are safe to use in a concurrent context.
-Most variants are strictly non-blocking and will never block the calling thread, with the exception of dynamic queues, which may sometimes block on some operations.
+All variants with the exception of [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) are strictly non-blocking and will never block the calling thread.
 
-## Queue variants
+### Queue variants
 
-- **Inline queues**: fixed-capacity queues backed by static storage.
+- **Static queues**: fixed-capacity queues backed by static storage.
 - **Allocated queues**: fixed-capacity queues backed by dynamically allocated storage, only available on feature `alloc`.
 - **Dynamic queues**: dynamically resizeable queues, only available on feature `dynamic`.
 - **Pooled Queues**: variants of other queues, which may store arbitrary types, only available on feature `pool`.
 
 Non-pooled queues store items in atomically updated slots, restricting the stored items to small, pointer-like values.
 
+### Usage
 
-## Usage
-
-`nblf_queue::InlineQueue`:
+[`InlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/struct.InlineQueue.html):
 
 ```rust
   #[cfg(feature = "unsafe-ptr48")]
@@ -51,8 +52,7 @@ Non-pooled queues store items in atomically updated slots, restricting the store
   run();
 ```
 
-
-`nblf_queue::PooledInlineQueue`:
+[`PooledInlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/pooled_static/struct.PooledInlineQueue.html):
 
 ```rust
   #[cfg(feature = "pool")]
@@ -74,8 +74,7 @@ Non-pooled queues store items in atomically updated slots, restricting the store
   run();
 ```
 
-
-`nblf_queue::DynamicQueue`:
+[`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html):
 
 ```rust
   #[cfg(feature = "dynamic")]
@@ -100,18 +99,17 @@ Non-pooled queues store items in atomically updated slots, restricting the store
   run();
 ```
 
-
-## Choosing a queue type
+### Choosing a queue type
 
 Do you have an allocator? -> Use a non-static Queue.
 Do you want to send large owned items? -> Use `Pooled*`.
 Do you want to resize your queue? -> Use `Dynamic*`.
 
-- `InlineQueue` and `Queue`: may only store small values and are optimized for this use case.
+- [`InlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/struct.InlineQueue.html) and [`Queue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/struct.Queue.html): may only store small values and are optimized for this use case.
 
-- `PooledInlineQueue` and `PooledQueue`: may store arbitrary types, at the cost slightly higher memory usage and runtime cost.
+- [`PooledInlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/pooled_static/struct.PooledInlineQueue.html) and [`PooledQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/pooled_queue/struct.PooledQueue.html): may store arbitrary types, at the cost of higher memory usage and runtime cost.
 
-- `DynamicQueue` and `PooledDynamicQueue`: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for `PooledDynamicQueue`.
+- [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html): may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html).
 
 > [!WARNING]
 > **Blocking Behaviour in Dynamic Queues**
@@ -120,8 +118,7 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 >
 > Additionally, dynamic queues may block on `pop` operations (and operations depending on it), if a `push` is preempted by a concurrent `resize` and a concurrent `pop` happens.
 
-
-## Platform Support
+### Platform Support
 
 Multiple storage types are available, dependent on platform:
 
@@ -135,37 +132,30 @@ Storage types will be chosen automatically, unless sepcified explicitly.
 > **ABA Safety & Storage Selection**
 >
 > If it is plausible that other threads could perform `(2^15 - 1) * queue_size`
-> pop and push operations while a single thread is paused/preempted in pop/push, `Tagged128` slots should be used to ensure ABA safety.
+> pop and push operations while a single thread is paused/preempted in pop/push, [`core::slots::Tagged128`](https://docs.rs/nblf-queue/latest/nblf_queue/core/slots/tagged128/struct.Tagged128.html) slots should be used to ensure ABA safety.
 >
 > **Tagged64 Safety**
 >
-> Sending ptr-types via `Tagged64` slots is not safe if more than 48 bits are used for pointers.
+> Sending ptr-types via [`core::slots::Tagged64`](https://docs.rs/nblf-queue/latest/nblf_queue/core/slots/tagged64/struct.Tagged64.html) slots is not safe if more than 48 bits are used for pointers.
 > This is currently enforced with a runtime check, however some unsafe usages may be missed by this check.
 
-## Feature Flags
+### Feature Flags
 
 - `std`: Enables `std` and `alloc` support.
-
 - `alloc`: Enables `alloc` support, allowing usage of some dynamically allocated queues.
-
 - `pool`: Enables pooled queues, which may store any type.
-
 - `dynamic`: Enables dynamic queues, which may be dynamically resized. Depends on `alloc`.
-
 - `atomic-fallback`: Uses `portable-atomic` `fallback` feature for atomics if necessary. It is discouraged to use this feature, as `fallback` internally uses locks.
-
 - `unsafe-ptr48`: implements AsPackedValue for pointers on `x86-64` and `aarch64`. This feature is safe to use if 48 or less bits are used for pointers on the target platform.
-
 - `default`: `pool`
 
+### Python Bindings
 
-## Python Bindings
-
-Python bindings backed by `PooledQueue` and `PooledDynamicQueue` are available for concurrent applications.
+Python bindings backed by [`PooledQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/pooled_queue/struct.PooledQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) are available for concurrent applications.
 Core operations detach from the GIL to allow parallel execution.
 
 > [!NOTE]
-> The Python bindings strictly use `Auto` slots without feature `atomic-fallback`.
+> The Python bindings strictly use [`core::slots::Auto`](https://docs.rs/nblf-queue/latest/nblf_queue/core/slots/struct.Auto.html) slots without feature `atomic-fallback`.
 > As a result, these bindings are only supported on platforms with native 64-bit or 128-bit atomic operations.
 
 ```python
@@ -185,10 +175,9 @@ Core operations detach from the GIL to allow parallel execution.
 
 ```
 
+### Testing
 
-## Testing
-
-The core test-suite of this crate was adapted from [`crossbeam-queue`](https://github.com/crossbeam-rs/crossbeam/tree/main/crossbeam-queue).
+The core test-suite of this crate was adapted from [`crossbeam-queue`](https://!github.com/crossbeam-rs/crossbeam/tree/main/crossbeam-queue).
 
 Current testing is based on:
 
@@ -197,9 +186,10 @@ Current testing is based on:
 - **Echeneis** - to test basic obstruction freedom.
 - **ASan** - to check for memory corruption.
 
-
-## References
+### References
 
 Alexandre Denis, Charles Goedefroit. NBLFQ: a lock-free MPMC queue optimized for low contention.
 IPDPS 2025 - 39th International Parallel & Distributed Processing Symposium, IEEE, Jun 2025,
 Milan, Italy. hal-04851700v2
+
+<!-- cargo-rdme end -->
