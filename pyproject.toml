@@ -36,6 +36,15 @@ module-name = "nblf_queue._nblf_queue_py"
 python-source = "python"
 profile = "release"
 
+include = [
+    "python/**/*",
+    "src/**/*",
+    "Cargo.toml",
+    "/README.md",
+    "/LICENSE*",
+    "/CHANGELOG.md",
+]
+
 [tool.pytest.ini_options]
 norecursedirs = ["target", ".git", ".venv"]
 testpaths = ["python/tests"]
