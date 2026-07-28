@@ -73,3 +73,83 @@ pub mod slots {
         compile_error!("target arch is currently not supported");
     }
 }
+
+#[cfg(feature = "pool")]
+#[macro_use]
+pub mod inline_pool_storage {
+    //! This module contains functionality to declare statically sized pools.
+
+    use lf_slots::{SlotPoolMeta, core::RawSlotPool};
+
+    use crate::core::{AsPackedValue, slots::SlotType};
+
+    /// The type of slot pool and queue slot associated with some marker type.
+    ///
+    /// The slot pool implements the traits
+    /// `RawSlotPool`, `SlotPoolMeta` and `Default` from the crate `lf-slots`.
+    ///
+    /// The slot implements the trait `SlotType` as declared in `nblf_queue::core::slots::SlotType`.
+    pub trait InlineSlotStore<T: AsPackedValue, const N: usize> {
+        /// The slot pool type associated with this type.
+        ///
+        /// The index pool is used to distribute space for items.
+        type Pool: RawSlotPool + SlotPoolMeta + Default;
+        /// The queue slot type associate with this type.
+        type SlotType: SlotType<T>;
+    }
+
+    macro_rules! impl_inline_slot_store {
+        ($($n:expr),* $(,)?) => {
+            $(
+                impl<T: $crate::core::AsPackedValue> InlineSlotStore<T, $n> for $crate::core::slots::Auto {
+                    type Pool = lf_slots::batched::WordPool<
+                        lf_slots::InlineSlots<
+                            { $n * lf_slots::core::Word::BITS as usize },
+                            { lf_slots::core::shard_count($n * lf_slots::core::Word::BITS as usize, lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize)) },
+                            { lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize) },
+                        >
+                    >;
+                    type SlotType = $crate::core::slots::Auto;
+                }
+            )*
+        };
+    }
+
+    impl_inline_slot_store!(
+        2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536
+    );
+
+    /// Defines a new storage layout of size `n`.
+    ///
+    /// Usage:
+    ///
+    /// ```rust
+    /// use nblf_queue::{impl_pool_capacity, PooledInlineQueue};
+    ///
+    /// impl_pool_capacity!(Storage42, 42);
+    ///
+    /// _ = PooledInlineQueue::<(), 42, Storage42>::with_conf();
+    ///
+    /// ```
+    #[macro_export]
+    macro_rules! impl_pool_capacity {
+        ($vis:vis $name:ident, $n:expr, $slot:path) => {
+            $vis struct $name;
+            impl<T: $crate::core::AsPackedValue>
+                $crate::core::inline_pool_storage::InlineSlotStore<T, $n> for $name
+            {
+                type SlotType = $slot;
+                type Pool = lf_slots::batched::WordPool<
+                    lf_slots::InlineSlots<
+                        { $n * lf_slots::core::Word::BITS as usize },
+                        { lf_slots::core::shard_count($n * lf_slots::core::Word::BITS as usize, lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize)) },
+                        { lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize) },
+                    >
+                >;
+            }
+        };
+        ($vis:vis $name:ident, $n:expr) => {
+            $crate::impl_pool_capacity!($vis $name, $n, $crate::core::slots::Auto)
+        };
+    }
+}

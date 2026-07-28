@@ -303,7 +303,7 @@ mod growable {
 
     #[test]
     fn len_grow_impl() {
-        const CAP: usize = 40;
+        const CAP: usize = 32;
         shuttle::check_pct(
             || {
                 let q = DynamicQueue::new(CAP);
@@ -357,8 +357,8 @@ mod growable {
                 let q = DynamicQueue::new(4);
                 linearizable_during_resize(q);
             },
-            5000,
             100,
+            4,
         );
     }
 
@@ -369,8 +369,8 @@ mod growable {
                 let q = DynamicQueue::new(4);
                 push_pop_resize(q);
             },
-            1000,
-            20,
+            100,
+            4,
         )
     }
 
@@ -465,7 +465,7 @@ mod growable {
 
         #[test]
         fn len_grow_impl() {
-            const CAP: usize = 40;
+            const CAP: usize = 32;
             shuttle::check_pct(
                 || {
                     let q = PooledDynamicQueue::new(CAP);

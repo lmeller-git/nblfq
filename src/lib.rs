@@ -16,14 +16,14 @@
 //!
 //! ## Usage
 //!
-//! [`StaticQueue`]:
+//! [`InlineQueue`]:
 //!
 //! ```rust
 //!   #[cfg(feature = "unsafe-ptr48")]
 //!   fn run() {
-//!     use nblf_queue::{StaticQueue, MPMCQueue};
+//!     use nblf_queue::{InlineQueue, MPMCQueue};
 //!
-//!     let q: StaticQueue<_, 2> = StaticQueue::new();
+//!     let q: InlineQueue<_, 2> = InlineQueue::new();
 //!
 //!     assert!(q.push(&42).is_ok());
 //!     assert!(q.push(&1).is_ok());
@@ -38,14 +38,14 @@
 //!   run();
 //! ```
 //!
-//! [`PooledStaticQueue`]:
+//! [`PooledInlineQueue`]:
 //!
 //! ```rust
 //!   #[cfg(feature = "pool")]
 //!   fn run() {
-//!     use nblf_queue::{PooledStaticQueue, MPMCQueue};
+//!     use nblf_queue::{PooledInlineQueue, MPMCQueue};
 //!
-//!     let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
+//!     let q: PooledInlineQueue<_, 2> = PooledInlineQueue::new();
 //!
 //!     assert!(q.push(42).is_ok());
 //!     assert!(q.push(1).is_ok());
@@ -91,9 +91,9 @@
 //! Do you want to send large owned items? -> Use `Pooled*`.
 //! Do you want to resize your queue? -> Use `Dynamic*`.
 //!
-//! - [`StaticQueue`] and [`Queue`]: may only store small values and are optimized for this use case.
+//! - [`InlineQueue`] and [`Queue`]: may only store small values and are optimized for this use case.
 //!
-//! - [`PooledStaticQueue`] and [`PooledQueue`]: may store arbitrary types, at the cost of higher memory usage and runtime cost.
+//! - [`PooledInlineQueue`] and [`PooledQueue`]: may store arbitrary types, at the cost of higher memory usage and runtime cost.
 //!
 //! - [`DynamicQueue`] and [`PooledDynamicQueue`]: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for [`PooledDynamicQueue`].
 //!
@@ -192,6 +192,7 @@ extern crate std;
 #[macro_use]
 pub(crate) mod utils;
 mod array;
+#[macro_use]
 pub mod core;
 #[cfg(feature = "dynamic")]
 mod growable;
@@ -203,9 +204,9 @@ mod sync;
 #[cfg(test)]
 mod tests;
 
+pub use array::InlineQueue;
 #[cfg(feature = "pool")]
-pub use array::PooledStaticQueue;
-pub use array::StaticQueue;
+pub use array::PooledInlineQueue;
 #[cfg(feature = "dynamic")]
 pub use growable::DynamicQueue;
 #[cfg(all(feature = "dynamic", feature = "pool"))]
@@ -222,9 +223,9 @@ pub use owned::Queue;
 /// # Examples
 ///
 /// ```rust
-/// use nblf_queue::{StaticQueue, MPMCQueue};
+/// use nblf_queue::{InlineQueue, MPMCQueue};
 ///
-/// let q: StaticQueue<_, 2> = StaticQueue::new();
+/// let q: InlineQueue<_, 2> = InlineQueue::new();
 ///
 /// assert!(q.push(42).is_ok());
 /// assert!(q.push(2).is_ok());
@@ -250,9 +251,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// assert!(q.push(10).is_ok());
     /// assert!(q.push(20).is_ok());
@@ -266,9 +267,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// assert!(q.push(10).is_ok());
     /// assert!(q.push(42).is_ok());
@@ -307,9 +308,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// assert!(q.force_push(10).is_none());
     /// assert!(q.force_push(20).is_none());
@@ -336,9 +337,9 @@ pub trait MPMCQueue {
     /// # Examples
     ///
     /// ```rust
-    /// use nblf_queue::{StaticQueue, MPMCQueue};
+    /// use nblf_queue::{InlineQueue, MPMCQueue};
     ///
-    /// let q: StaticQueue<_, 2> = StaticQueue::new();
+    /// let q: InlineQueue<_, 2> = InlineQueue::new();
     ///
     /// q.force_push_and_do(10, |item| {});
     /// q.force_push_and_do(20, |item| {});

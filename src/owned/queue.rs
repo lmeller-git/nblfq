@@ -74,8 +74,10 @@ where
 
 #[cfg(all(feature = "pool", feature = "alloc"))]
 mod pooled_queue {
+    use lf_slots::WordSlots;
+
     use super::*;
-    use crate::pool::{DataStorage, IndexStorage, ItemHandle, Pooled};
+    use crate::pool::{DataStorage, ItemHandle, Pooled};
 
     /// A pooled `MPMCQueue`.
     ///
@@ -90,7 +92,7 @@ mod pooled_queue {
         S: SlotType<ItemHandle<T>>,
     {
         #[allow(clippy::type_complexity)]
-        inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, Queue<IndexStorage>>,
+        inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, WordSlots>,
     }
 
     #[allow(private_bounds)]
@@ -109,7 +111,7 @@ mod pooled_queue {
                 inner: Pooled::new_from(
                     Queue::with_slot(size),
                     BoxedBuffer::new(size),
-                    Queue::with_slot(size),
+                    WordSlots::new(size),
                 ),
             }
         }
@@ -137,7 +139,7 @@ mod pooled_queue {
                 inner: Pooled::new_from(
                     Queue::with_slot(size),
                     BoxedBuffer::new(arena_size),
-                    Queue::with_slot(arena_size),
+                    WordSlots::new(arena_size),
                 ),
             }
         }

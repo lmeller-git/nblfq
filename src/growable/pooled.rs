@@ -1,3 +1,5 @@
+use lf_slots::WordSlots;
+
 use crate::{
     MPMCQueue,
     Resize,
@@ -7,19 +9,14 @@ use crate::{
     },
     growable::{GrowableQueueCore, NewSized},
     owned::buffer::BoxedBuffer,
-    pool::{DataStorage, IndexStorage, ItemHandle, Pooled},
+    pool::{DataStorage, ItemHandle, Pooled},
 };
 
 #[allow(type_alias_bounds)]
 type PooledBoxed<T, S>
 where
     S: SlotType<ItemHandle<T>>,
-= Pooled<
-    T,
-    QueueCore<BoxedBuffer<S::Slot>>,
-    BoxedBuffer<DataStorage<T>>,
-    QueueCore<BoxedBuffer<<Auto as SlotType<IndexStorage>>::Slot>>,
->;
+= Pooled<T, QueueCore<BoxedBuffer<S::Slot>>, BoxedBuffer<DataStorage<T>>, WordSlots>;
 
 /// A dynamically resizeable, pooled `MPMCQueue`.
 ///

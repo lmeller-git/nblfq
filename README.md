@@ -30,14 +30,14 @@ Non-pooled queues store items in atomically updated slots, restricting the store
 
 ### Usage
 
-[`StaticQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/struct.StaticQueue.html):
+[`InlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/struct.InlineQueue.html):
 
 ```rust
   #[cfg(feature = "unsafe-ptr48")]
   fn run() {
-    use nblf_queue::{StaticQueue, MPMCQueue};
+    use nblf_queue::{InlineQueue, MPMCQueue};
 
-    let q: StaticQueue<_, 2> = StaticQueue::new();
+    let q: InlineQueue<_, 2> = InlineQueue::new();
 
     assert!(q.push(&42).is_ok());
     assert!(q.push(&1).is_ok());
@@ -52,14 +52,14 @@ Non-pooled queues store items in atomically updated slots, restricting the store
   run();
 ```
 
-[`PooledStaticQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/pooled_static/struct.PooledStaticQueue.html):
+[`PooledInlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/pooled_static/struct.PooledInlineQueue.html):
 
 ```rust
   #[cfg(feature = "pool")]
   fn run() {
-    use nblf_queue::{PooledStaticQueue, MPMCQueue};
+    use nblf_queue::{PooledInlineQueue, MPMCQueue};
 
-    let q: PooledStaticQueue<_, 2> = PooledStaticQueue::new();
+    let q: PooledInlineQueue<_, 2> = PooledInlineQueue::new();
 
     assert!(q.push(42).is_ok());
     assert!(q.push(1).is_ok());
@@ -105,9 +105,9 @@ Do you have an allocator? -> Use a non-static Queue.
 Do you want to send large owned items? -> Use `Pooled*`.
 Do you want to resize your queue? -> Use `Dynamic*`.
 
-- [`StaticQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/struct.StaticQueue.html) and [`Queue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/struct.Queue.html): may only store small values and are optimized for this use case.
+- [`InlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/struct.InlineQueue.html) and [`Queue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/struct.Queue.html): may only store small values and are optimized for this use case.
 
-- [`PooledStaticQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/pooled_static/struct.PooledStaticQueue.html) and [`PooledQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/pooled_queue/struct.PooledQueue.html): may store arbitrary types, at the cost of higher memory usage and runtime cost.
+- [`PooledInlineQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/array/queue/pooled_static/struct.PooledInlineQueue.html) and [`PooledQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/owned/queue/pooled_queue/struct.PooledQueue.html): may store arbitrary types, at the cost of higher memory usage and runtime cost.
 
 - [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html): may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html).
 
