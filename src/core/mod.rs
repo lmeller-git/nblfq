@@ -102,10 +102,12 @@ pub mod inline_pool_storage {
         ($($n:expr),* $(,)?) => {
             $(
                 impl<T: $crate::core::AsPackedValue> InlineSlotStore<T, $n> for $crate::core::slots::Auto {
-                    type Pool = lf_slots::InlineSlots<
-                        $n,
-                        { lf_slots::core::shard_count($n, lf_slots::core::words_per_shard($n)) },
-                        { lf_slots::core::words_per_shard($n) }
+                    type Pool = lf_slots::batched::WordPool<
+                        lf_slots::InlineSlots<
+                            { $n * lf_slots::core::Word::BITS as usize },
+                            { lf_slots::core::shard_count($n * lf_slots::core::Word::BITS as usize, lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize)) },
+                            { lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize) },
+                        >
                     >;
                     type SlotType = $crate::core::slots::Auto;
                 }
@@ -137,10 +139,12 @@ pub mod inline_pool_storage {
                 $crate::core::inline_pool_storage::InlineSlotStore<T, $n> for $name
             {
                 type SlotType = $slot;
-                type Pool = lf_slots::InlineSlots<
-                    $n,
-                    { lf_slots::core::shard_count($n, lf_slots::core::words_per_shard($n)) },
-                    { lf_slots::core::words_per_shard($n) }
+                type Pool = lf_slots::batched::WordPool<
+                    lf_slots::InlineSlots<
+                        { $n * lf_slots::core::Word::BITS as usize },
+                        { lf_slots::core::shard_count($n * lf_slots::core::Word::BITS as usize, lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize)) },
+                        { lf_slots::core::words_per_shard($n * lf_slots::core::Word::BITS as usize) },
+                    >
                 >;
             }
         };

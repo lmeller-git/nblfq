@@ -74,7 +74,7 @@ where
 
 #[cfg(all(feature = "pool", feature = "alloc"))]
 mod pooled_queue {
-    use lf_slots::Slots;
+    use lf_slots::WordSlots;
 
     use super::*;
     use crate::pool::{DataStorage, ItemHandle, Pooled};
@@ -92,7 +92,7 @@ mod pooled_queue {
         S: SlotType<ItemHandle<T>>,
     {
         #[allow(clippy::type_complexity)]
-        inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, Slots>,
+        inner: Pooled<T, Queue<ItemHandle<T>, S>, BoxedBuffer<DataStorage<T>>, WordSlots>,
     }
 
     #[allow(private_bounds)]
@@ -111,7 +111,7 @@ mod pooled_queue {
                 inner: Pooled::new_from(
                     Queue::with_slot(size),
                     BoxedBuffer::new(size),
-                    Slots::new(size),
+                    WordSlots::new(size),
                 ),
             }
         }
@@ -139,7 +139,7 @@ mod pooled_queue {
                 inner: Pooled::new_from(
                     Queue::with_slot(size),
                     BoxedBuffer::new(arena_size),
-                    Slots::new(arena_size),
+                    WordSlots::new(arena_size),
                 ),
             }
         }

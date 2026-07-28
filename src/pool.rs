@@ -205,12 +205,12 @@ where
 
 #[cfg(feature = "dynamic")]
 mod growable {
-    use lf_slots::Slots;
+    use lf_slots::WordSlots;
 
     use super::*;
     use crate::growable::NewSized;
 
-    impl<T, Q, DataBuf> NewSized for Pooled<T, Q, DataBuf, Slots>
+    impl<T, Q, DataBuf> NewSized for Pooled<T, Q, DataBuf, WordSlots>
     where
         Q: MPMCQueue<Item = ItemHandle<T>> + NewSized,
         DataBuf: Buffer<Slot = DataStorage<T>> + NewSized,
@@ -219,7 +219,7 @@ mod growable {
             Self::new_from(
                 Q::with_size(size),
                 DataBuf::with_size(size),
-                Slots::new(size),
+                WordSlots::new(size),
             )
         }
     }
