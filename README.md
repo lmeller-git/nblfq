@@ -17,7 +17,7 @@ An atomic lock-free MPMC queue based on the NBLFQ algorithm.
 This repository provides multiple queue implementations with different storage and allocation strategies.
 
 All queues in this repository are safe to use in a concurrent context.
-All variants with the exception of [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) are strictly non-blocking and will never block the calling thread.
+All queue variants in this crate are strictly non-blocking and will never block the calling thread.
 
 ### Queue variants
 
@@ -112,11 +112,13 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 - [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html): may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html).
 
 > [!WARNING]
-> **Blocking Behaviour in Dynamic Queues**
->
-> All dynamic queues may block on concurrent `resize` operations.
->
-> Additionally, dynamic queues may block on `pop` operations (and operations depending on it), if a `push` is preempted by a concurrent `resize` and a concurrent `pop` happens.
+> **Ordering in DynamicQueues**
+
+> `DynamicQueue` and `PooledDynamicQueue` do not have strict FIFO ordering if concurrent resizes are happening.
+
+> In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
+
+> Note that `empty-linearizability` is still guaranteed uner all circumstances.
 
 ### Platform Support
 
