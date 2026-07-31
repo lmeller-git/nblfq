@@ -98,12 +98,14 @@
 //! - [`DynamicQueue`] and [`PooledDynamicQueue`]: may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for [`PooledDynamicQueue`].
 //!
 //! > [!WARNING]
-//! > **Ordering in DynamicQueues**
-//!
-//! > `DynamicQueue` and `PooledDynamicQueue` do not have strict FIFO ordering if concurrent resizes are happening.
-//!
+//! > **Ordering and locking behaviour in DynamicQueues**
+//! >
+//! > The [`Resize::resize`] operation in [`DynamicQueue`] and [`PooledDynamicQueue`] may block.
+//! > Thus if [`Resize::resize`] is taken into account [`DynamicQueue`] and [`PooledDynamicQueue`] are NOT strictly lock-free.
+//! > However [`MPMCQueue::push`] and [`MPMCQueue::pop`] are guaranteed to never block.
+//! >
+//! > [`DynamicQueue`] and [`PooledDynamicQueue`] do not have strict FIFO ordering if concurrent resizes are happening.
 //! > In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-//!
 //! > Note that `empty-linearizability` is still guaranteed uner all circumstances.
 //!
 //! ## Platform Support

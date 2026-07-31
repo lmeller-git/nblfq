@@ -112,12 +112,14 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 - [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html): may be resized dynamically, at the cost of higher total memory usage and runtime cost. This cost is even higher for [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html).
 
 > [!WARNING]
-> **Ordering in DynamicQueues**
-
-> `DynamicQueue` and `PooledDynamicQueue` do not have strict FIFO ordering if concurrent resizes are happening.
-
+> **Ordering and locking behaviour in DynamicQueues**
+>
+> The [`Resize::resize`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.Resize.html#tymethod.resize) operation in [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) may block.
+> Thus if [`Resize::resize`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.Resize.html#tymethod.resize) is taken into account [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) are NOT strictly lock-free.
+> However [`MPMCQueue::push`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.MPMCQueue.html#tymethod.push) and [`MPMCQueue::pop`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.MPMCQueue.html#tymethod.pop) are guaranteed to never block.
+>
+> [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) do not have strict FIFO ordering if concurrent resizes are happening.
 > In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-
 > Note that `empty-linearizability` is still guaranteed uner all circumstances.
 
 ### Platform Support
