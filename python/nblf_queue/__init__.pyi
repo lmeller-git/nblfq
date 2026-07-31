@@ -7,6 +7,9 @@ class DynamicQueue(Generic[_T]):
     A dynamically growable, lock-free non-blocking MPMC queue.
 
     Core operations detach from the python GIL, to ensure concurrent performance.
+
+    During an ongoing `resize` operation, the ordering of this queue degrades from strict FIFO ordering to `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
+    `empty-linearizability` is guaranteed in any case.
     """
 
     def __init__(self, size: int) -> None:
@@ -28,8 +31,6 @@ class DynamicQueue(Generic[_T]):
         Attempts to pop an item from the queue.
 
         Returns `None` if the queue was empty.
-
-        This method may block on stalling pushes during an ongoing concurrent resize.
         """
         ...
 
@@ -72,8 +73,6 @@ class DynamicQueue(Generic[_T]):
         This method may pop an arbitrary amount of items from the queue.
 
         Returns the last popped item, if the queue was full. All other items are dropped.
-
-        This method may block on stalling pushes during an ongoing concurrent resize.
         """
         ...
 
@@ -84,8 +83,6 @@ class DynamicQueue(Generic[_T]):
         This method may pop an arbitrary amount of items from the queue.
 
         Applies `f` to each popped item.
-
-        This method may block on stalling pushes during an ongoing concurrent resize.
         """
         ...
 

@@ -1,5 +1,7 @@
 #[cfg(feature = "dynamic")]
 use crate::Resize;
+#[cfg(feature = "dynamic")]
+use crate::sync::atomic::AtomicBool;
 use crate::{
     MPMCQueue,
     sync::{
@@ -140,7 +142,11 @@ where
     const RESIZE_ITER: usize = 1;
 
     let q = Arc::new(q);
-    let count = Arc::new(AtomicUsize::new(0));
+    let received = Arc::new(
+        (0..ITER)
+            .map(|_| AtomicBool::new(false))
+            .collect::<Vec<_>>(),
+    );
 
     let q1 = q.clone();
     let push = thread::Builder::new()
@@ -166,7 +172,7 @@ where
         .unwrap();
 
     let q3 = q.clone();
-    let c = count.clone();
+    let rec = received.clone();
     let pop = thread::Builder::new()
         .name("pop".into())
         .spawn(move || {
@@ -177,8 +183,8 @@ where
                     }
                     thread::yield_now();
                 };
-                c.fetch_add(1, Ordering::SeqCst);
-                assert_eq!(item, i as i32);
+                let prev_seen = rec[item as usize].swap(true, Ordering::SeqCst);
+                assert!(!prev_seen, "Duplicate item popped: {}", item);
             }
         })
         .unwrap();
@@ -187,7 +193,8 @@ where
     pop.join().unwrap();
     resize.join().unwrap();
 
-    assert_eq!(count.load(Ordering::SeqCst), ITER);
+    assert!(received.iter().all(|seen| seen.load(Ordering::SeqCst)));
+    assert_eq!(q.len(), 0);
 }
 
 #[cfg(feature = "dynamic")]

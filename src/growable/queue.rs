@@ -196,6 +196,27 @@ impl<T, Q, S> GrowableQueueCore<T, Q, S> {
     }
 }
 
+impl<T, Q, S> GrowableQueueCore<T, Q, S>
+where
+    Q: MPMCQueue<Item = T>,
+{
+    fn try_pop_from(
+        &self,
+        epoch: usize,
+        registration: impl Fn(&Self, usize) -> bool,
+    ) -> Result<Option<T>, ()> {
+        if !registration(self, epoch) {
+            return Err(());
+        }
+
+        let item = self.get_queue(epoch).pop();
+
+        self.deregister_reader(epoch);
+
+        Ok(item)
+    }
+}
+
 impl<T, Q, S> MPMCQueue for GrowableQueueCore<T, Q, S>
 where
     Q: MPMCQueue<Item = T>,
@@ -221,89 +242,105 @@ where
         }
     }
 
-    /// This method may block on stalling pushes under concurrent resizes.
-    ///
-    /// For more info refer to the trait-level docs of `MPMCQueue`.
     fn pop(&self) -> Option<Self::Item> {
+        #[cfg(any(shuttle, loom))]
         let mut backoff = Backoff::new();
-        loop {
-            let push_epoch = self.push_epoch.load(Ordering::Acquire);
-            let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
 
-            if pop_epoch != push_epoch {
-                // drain old buffer
+        // if push_epoch != pop_epoch, we need to drain the old queue.
+        // In order to provide `empty-linearizability` we do a double collect over BOTH queues.
+        //
+        // If push_epoch == pop_epoch we only need to do another sweep IF push_epoch has changed by the end of this call
+        for _ in 0..2 {
+            loop {
+                let push_epoch = self.push_epoch.load(Ordering::Acquire);
+                let pop_epoch = self.pop_epoch.load(Ordering::Acquire);
 
-                if !self.register_pop(pop_epoch) {
-                    #[cfg(any(shuttle, loom))]
-                    backoff.backoff();
-                    continue;
-                }
+                if pop_epoch != push_epoch {
+                    // drain old buffer
 
-                // it is safe to call get_queue on pop_epoch here, since no resize can happen while we have not updated pop_epoch and reads on this epoch are happening
-                let item = self.get_queue(pop_epoch).pop();
+                    // it is safe to call get_queue on pop_epoch here, since no resize can happen while we have not updated pop_epoch and reads on this epoch are happening
+                    let Ok(item) = self.try_pop_from(pop_epoch, Self::register_pop) else {
+                        #[cfg(any(shuttle, loom))]
+                        backoff.backoff();
+                        continue;
+                    };
 
-                self.deregister_reader(pop_epoch);
+                    if item.is_some() {
+                        return item;
+                    }
 
-                if item.is_some() {
-                    return item;
-                }
+                    if self.active_pushes[pop_epoch % 2].load(Ordering::Acquire) == 0 {
+                        let Ok(item) = self.try_pop_from(pop_epoch, Self::register_pop) else {
+                            #[cfg(any(shuttle, loom))]
+                            backoff.backoff();
+                            continue;
+                        };
 
-                if self.active_pushes[pop_epoch % 2].load(Ordering::Acquire) == 0 {
-                    if !self.register_pop(pop_epoch) {
+                        if item.is_some() {
+                            return item;
+                        }
+
+                        _ = self.pop_epoch.compare_exchange_weak(
+                            pop_epoch,
+                            pop_epoch + 1,
+                            Ordering::AcqRel,
+                            Ordering::Relaxed,
+                        );
+
                         #[cfg(any(shuttle, loom))]
                         backoff.backoff();
                         continue;
                     }
 
-                    let final_item = self.get_queue(pop_epoch).pop();
+                    // at this point the old queue did not contain any items, even though items are in-flight. At this point the new queue may already contain items.
+                    // We face a tradeoff:
+                    //
+                    // a) continue in the inner loop and block on the active_pushers -> violates non-blocking/obstruction-freedom guarantees
+                    // b) check the new queue -> opens up the possibilty for item reordering, even in spsc scenarios, i.e. violates FIFO guarantees + linearizability
+                    // It is worth noting here that the extend of reordering per item is bounded exactly by the number of threads concurrently executing `pop` during a `push` AND `resize`.
+                    // c) bail, even though the queue is non-empty -> violates linearizability (and emptiness assumptions) in that case.
+                    // Even worse: if some active_pusher is indefinitely dead, we will henceforth only bail. Thus this option implicitly blocks on the stalled pusher.
+                    //
+                    // c is of course unaccaptable.
+                    //
+                    // This would be circumventeable iff a helping mechanims where added or the old queue were inactivated, both of which is not possible given the opaque inner queue type.
+                    //
+                    // the fundamental question is:
+                    // Do we want complete lock-freedom in `push` and `pop`, or do we want strict 0-FIFO ordering always.
+                    // This tradeoff may fall differently in different contexts, however it seems reasonable to relax strict FIFO guarantees
+                    // and accept N-FIFO semantics while resizing the queue. N-FIFO semantics should in practice keep most of the benefits of 0-FIFO, while stll preserving lock-freedom.
+                    // Note that we do still preserve `empty-linearizability` here by double collecting:
+                    // if the first iteration turns out to be double None, we have two possibilities:
+                    // a) the old queue was truly empty at the point of popping from the new queue
+                    // b) the old queue was non-empty at that point
+                    // if the second iteration returns an item, this doesnt matter
+                    // if it returns None also (for the old queue), then we have know that a was correct OR the item was popped by someone else, in which case we are also safe.
+                }
 
-                    self.deregister_reader(pop_epoch);
+                let Ok(item) = self.try_pop_from(push_epoch, Self::register_push) else {
+                    #[cfg(any(shuttle, loom))]
+                    backoff.backoff();
+                    continue;
+                };
 
-                    if final_item.is_some() {
-                        return final_item;
-                    }
-
-                    _ = self.pop_epoch.compare_exchange_weak(
-                        pop_epoch,
-                        pop_epoch + 1,
-                        Ordering::AcqRel,
-                        Ordering::Relaxed,
-                    );
-
+                if item.is_none() && push_epoch != self.push_epoch.load(Ordering::Acquire) {
                     #[cfg(any(shuttle, loom))]
                     backoff.backoff();
                     continue;
                 }
 
-                // at this point the old queue did not contain any items, even though items are in-flight. At this point the new queue may already contain items.
-                // We face a tradeoff:
-                //
-                // a) continue in the inner loop and block on the active_pushers -> violates non-blocking/obstruction-freedom guarantees
-                // b) check the new queue -> opens up the possibilty for item reordering, even in spsc scenarios, i.e. violates FIFO guarantees + linearizability
-                // c) bail, even though the queue is non-empty -> violates linearizability (and emptiness assumptions) in that case.
-                // Even worse: if some active_pusher is indefinitely dead, we will henceforth only bail. Thus this option implicitly blocks on the stalled pusher.
-                //
-                // b and c are unacceptable, because they make the queue behave in unexpected ways AND may lead to implicit blocking behaviours.
+                if item.is_some() || push_epoch == pop_epoch {
+                    return item;
+                }
+                // else do the second collect pass if we come from the slow path
+                #[cfg(any(loom, shuttle))]
                 backoff.backoff();
-                continue;
+                break;
             }
-
-            if !self.register_push(push_epoch) {
-                continue;
-            }
-
-            let item = self.get_queue(push_epoch).pop();
-
-            self.deregister_reader(push_epoch);
-
-            if item.is_none() && push_epoch != self.push_epoch.load(Ordering::Acquire) {
-                #[cfg(any(shuttle, loom))]
-                backoff.backoff();
-                continue;
-            }
-
-            return item;
         }
+
+        // there was a linearizable time point during an iteration where both queues where truly empty
+        None
     }
 
     fn capacity(&self) -> usize {
@@ -412,8 +449,8 @@ where
 
 /// A dynamically sized concurrent queue.
 ///
-/// Operations on this queue are lock-free if `resize` is not actively used.
-/// During an ongoing `resize` operation, `pop` and operations depending on it may block on stalled `pushes`.
+/// During an ongoing `resize` operation, the ordering of this queue degrades from strict FIFO ordering to `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
+/// `empty-linearizability` is guaranteed in any case.
 pub struct DynamicQueue<T, S = Auto>
 where
     S: SlotType<T>,
@@ -457,9 +494,6 @@ where
         self.inner.push(item)
     }
 
-    /// This method may block on stalling pushes under concurrent resizes.
-    ///
-    /// For more info refer to the trait-level docs of `MPMCQueue`.
     fn pop(&self) -> Option<Self::Item> {
         self.inner.pop()
     }

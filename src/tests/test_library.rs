@@ -516,7 +516,7 @@ mod growth {
     use super::*;
     use crate::{
         Resize,
-        sync::{Arc, thread},
+        sync::{Arc, atomic::AtomicBool, thread},
     };
 
     pub(crate) fn smoke_grow<Q>(q: Q)
@@ -859,10 +859,11 @@ mod growth {
 
         scope(|scope| {
             scope.spawn(|| {
-                for i in 0..COUNT {
+                for _ in 0..COUNT {
                     loop {
                         if let Some(x) = q.pop() {
-                            assert_eq!(x, i as u32);
+                            // nop strict 0-FIFO ordering during resize
+                            assert!(x < COUNT as u32);
                             break;
                         }
                         crate::utils::Backoff::new().backoff();
@@ -1044,11 +1045,16 @@ mod growth {
     where
         Q: MPMCQueue<Item = i32> + Resize + Sync + Send + 'static,
     {
-        const ITER: usize = 2;
-        const RESIZE_ITER: usize = 1;
+        const ITER: usize = 100;
+        const RESIZE_ITER: usize = 5;
 
         let q = Arc::new(q);
-        let count = Arc::new(AtomicUsize::new(0));
+
+        let received = Arc::new(
+            (0..ITER)
+                .map(|_| AtomicBool::new(false))
+                .collect::<Vec<_>>(),
+        );
 
         let q1 = q.clone();
         let push = thread::spawn(move || {
@@ -1068,17 +1074,18 @@ mod growth {
         });
 
         let q3 = q.clone();
-        let c = count.clone();
+        let rec = received.clone();
         let pop = thread::spawn(move || {
-            for i in 0..ITER {
+            for _ in 0..ITER {
                 let item = loop {
                     if let Some(x) = q3.pop() {
                         break x;
                     }
                     thread::yield_now();
                 };
-                c.fetch_add(1, Ordering::SeqCst);
-                assert_eq!(item, i as i32);
+
+                let prev_seen = rec[item as usize].swap(true, Ordering::SeqCst);
+                assert!(!prev_seen, "Duplicate item popped: {}", item);
             }
         });
 
@@ -1086,6 +1093,7 @@ mod growth {
         pop.join().unwrap();
         resize.join().unwrap();
 
-        assert_eq!(count.load(Ordering::SeqCst), ITER);
+        assert!(received.iter().all(|seen| seen.load(Ordering::SeqCst)));
+        assert_eq!(q.len(), 0);
     }
 }

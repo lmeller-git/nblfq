@@ -21,13 +21,13 @@ where
     QueueCore<BoxedBuffer<<Auto as SlotType<IndexStorage>>::Slot>>,
 >;
 
-/// A dynamically resizeable, pooled `MPMCQueue`.
+/// A dynamically resizeable, pooled [`MPMCQueue`].
 ///
-/// Unlike `DynamicQueue`, this queue may store any type, at the cost of higher runtime and higher memory.
+/// Unlike [`crate::growable::DynamicQueue`], this queue may store any type, at the cost of higher runtime and higher memory.
 ///
 /// Only available on feature `dynamic` + `pool`.
 ///
-/// For more info refer to `DynamicQueue`.
+/// For more info refer to [`crate::growable::DynamicQueue`].
 #[allow(private_bounds)]
 pub struct PooledDynamicQueue<T, S = Auto>
 where
