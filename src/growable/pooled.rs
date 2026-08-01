@@ -1,3 +1,5 @@
+use mpmc_resize::{BoundedCollection, Resizable};
+
 use crate::{
     MPMCQueue,
     Resize,
@@ -5,7 +7,6 @@ use crate::{
         queue::QueueCore,
         slots::{Auto, SlotType},
     },
-    growable::{GrowableQueueCore, NewSized},
     owned::buffer::BoxedBuffer,
     pool::{DataStorage, IndexStorage, ItemHandle, Pooled},
 };
@@ -33,7 +34,7 @@ pub struct PooledDynamicQueue<T, S = Auto>
 where
     S: SlotType<ItemHandle<T>>,
 {
-    inner: GrowableQueueCore<T, PooledBoxed<T, S>, S>,
+    inner: Resizable<PooledBoxed<T, S>>,
 }
 
 impl<T> PooledDynamicQueue<T, Auto> {
@@ -51,7 +52,7 @@ impl<T> PooledDynamicQueue<T, Auto> {
         S: SlotType<ItemHandle<T>>,
     {
         PooledDynamicQueue {
-            inner: GrowableQueueCore::with_size(size),
+            inner: Resizable::with_capacity(size),
         }
     }
 }
@@ -63,37 +64,37 @@ where
     type Item = T;
 
     fn push(&self, item: Self::Item) -> Result<(), Self::Item> {
-        self.inner.push(item)
+        self.inner.try_push(item)
     }
 
     /// This method may block on stalling pushes under concurrent resizes.
     ///
     /// For more info refer to the trait-level docs of `MPMCQueue`.
     fn pop(&self) -> Option<Self::Item> {
-        self.inner.pop()
+        self.inner.try_pop()
     }
 
     fn len(&self) -> usize {
-        self.inner.len()
+        MPMCQueue::len(&self.inner)
     }
 
     fn capacity(&self) -> usize {
-        self.inner.capacity()
+        MPMCQueue::capacity(&self.inner)
     }
 
     fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+        MPMCQueue::is_empty(&self.inner)
     }
 
     fn is_full(&self) -> bool {
-        self.inner.is_full()
+        MPMCQueue::is_full(&self.inner)
     }
 }
 
 impl<T, S> Resize for PooledDynamicQueue<T, S>
 where
     S: SlotType<ItemHandle<T>>,
-    GrowableQueueCore<T, PooledBoxed<T, S>, S>: Resize,
+    Resizable<PooledBoxed<T, S>>: Resize,
 {
     fn resize(&self, size: usize) -> bool {
         self.inner.resize(size)

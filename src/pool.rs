@@ -1,4 +1,4 @@
-use core::{fmt::Debug, marker::PhantomData};
+use core::{fmt::Debug, marker::PhantomData, panic::RefUnwindSafe};
 
 use crate::{
     MPMCQueue,
@@ -64,6 +64,16 @@ where
         _ = self.free_slots.push(ItemHandle::new(idx));
         item
     }
+}
+
+// SAFETY: `Pool` uses unique index ownership (`OwnedIdx`) and atomic/cell abstractions
+// to ensure panic boundaries leave slots in a valid state (at worst leaking an index).
+// DataBuf is not RefUnwindSafe due to usage of UnsafeCell, however all accesses are strictly gated by the OwnedIdx system.
+impl<T, DataBuf, Q> RefUnwindSafe for Pool<T, DataBuf, Q>
+where
+    T: RefUnwindSafe,
+    Q: RefUnwindSafe,
+{
 }
 
 // SAFETY:
@@ -197,6 +207,8 @@ where
 
 #[cfg(feature = "dynamic")]
 mod growable {
+    use mpmc_resize::BoundedCollection;
+
     use super::*;
     use crate::growable::NewSized;
 
@@ -212,6 +224,43 @@ mod growable {
                 DataBuf::with_size(size),
                 IndexQ::with_size(size),
             )
+        }
+    }
+
+    impl<T, Q, DataBuf, IndexQ> BoundedCollection for Pooled<T, Q, DataBuf, IndexQ>
+    where
+        Q: MPMCQueue<Item = ItemHandle<T>> + NewSized,
+        DataBuf: Buffer<Slot = DataStorage<T>> + NewSized,
+        IndexQ: MPMCQueue<Item = IndexStorage> + NewSized,
+    {
+        type Item = T;
+
+        fn with_capacity(capacity: usize) -> Self {
+            Self::with_size(capacity)
+        }
+
+        fn try_push(&self, item: Self::Item) -> Result<(), Self::Item> {
+            self.push(item)
+        }
+
+        fn try_pop(&self) -> Option<Self::Item> {
+            self.pop()
+        }
+
+        fn len(&self) -> usize {
+            MPMCQueue::len(self)
+        }
+
+        fn capacity(&self) -> usize {
+            MPMCQueue::capacity(self)
+        }
+
+        fn is_empty(&self) -> bool {
+            MPMCQueue::is_empty(self)
+        }
+
+        fn is_full(&self) -> bool {
+            MPMCQueue::is_full(self)
         }
     }
 }

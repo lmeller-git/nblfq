@@ -43,16 +43,17 @@ rust-version = "1.85.0"
 
 [features]
 default = ["pool"]
-std = ["alloc"]
+std = ["alloc", "mpmc-resize/std"]
 alloc = []
 pool = []
 dynamic = ["alloc"]
-atomic-fallback = ["portable-atomic/fallback"]
+atomic-fallback = ["portable-atomic/fallback", "mpmc-resize/atomic-fallback"]
 unsafe-ptr48 = []
 
 [dependencies]
 crossbeam-utils = { version = "0.8.21", default-features = false }
 portable-atomic = { version = "1.13.1", default-features = false, features = ["require-cas"] }
+mpmc-resize = { git = "https://github.com/lmeller-git/mpmc-resize", default-features = false }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
