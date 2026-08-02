@@ -178,7 +178,7 @@ jobs:
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
       - name: set up
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
       - name: Install uv
         uses: astral-sh/setup-uv@v7
       - name: dependencies
@@ -209,7 +209,7 @@ jobs:
         with:
           toolchain: stable
       - name: set up
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
       - name: Install uv
         uses: astral-sh/setup-uv@v7
       - name: dependencies
