@@ -176,7 +176,7 @@ where
     let pop = thread::Builder::new()
         .name("pop".into())
         .spawn(move || {
-            for i in 0..ITER {
+            for _ in 0..ITER {
                 let item = loop {
                     if let Some(x) = q3.pop() {
                         break x;
