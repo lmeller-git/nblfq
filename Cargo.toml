@@ -53,7 +53,7 @@ unsafe-ptr48 = []
 [dependencies]
 crossbeam-utils = { version = "0.8.21", default-features = false }
 portable-atomic = { version = "1.13.1", default-features = false, features = ["require-cas"] }
-mpmc-resize = { git = "https://github.com/lmeller-git/mpmc-resize", default-features = false }
+mpmc-resize = { version = "0.1.1", default-features = false }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }

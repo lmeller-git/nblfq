@@ -500,8 +500,9 @@ checksum = "c505b3e17ed6b70a7ed2e67fbb2c560ee327353556120d6e72f5232b6880d536"
 
 [[package]]
 name = "mpmc-resize"
-version = "0.1.0"
-source = "git+https://github.com/lmeller-git/mpmc-resize#740e21c143904b162cbabde7e4e8af8b8ed3029a"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c94e382b0f31c124f390e5f8f3f0f59bb9ed5fee0e1a7465d6cf535c9bdb0d3"
 dependencies = [
  "crossbeam-utils",
  "echeneis",
