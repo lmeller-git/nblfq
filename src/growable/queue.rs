@@ -25,9 +25,9 @@ where
 /// A dynamically sized concurrent queue.
 ///
 /// During an ongoing `resize` operation, the ordering of this queue degrades from strict FIFO ordering to `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-/// `empty-linearizability` is guaranteed in any case.
+/// `linearizability` is guaranteed in any case.
 ///
-/// For more info consult [`mpmc_resize::Resizable`].
+/// For more info consult `mpmc_resize::Resizable`.
 pub struct DynamicQueue<T, S = Auto>
 where
     S: SlotType<T>,

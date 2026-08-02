@@ -106,7 +106,9 @@
 //! >
 //! > [`DynamicQueue`] and [`PooledDynamicQueue`] do not have strict FIFO ordering if concurrent resizes are happening.
 //! > In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-//! > Note that `empty-linearizability` is still guaranteed uner all circumstances.
+//! > Note that `linearizability` is still guaranteed uner all circumstances under the queues `k-FIFO` specification.
+//! >
+//! > For more information consult [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
 //!
 //! ## Platform Support
 //!

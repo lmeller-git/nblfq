@@ -120,7 +120,9 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 >
 > [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) do not have strict FIFO ordering if concurrent resizes are happening.
 > In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-> Note that `empty-linearizability` is still guaranteed uner all circumstances.
+> Note that `linearizability` is still guaranteed uner all circumstances under the queues `k-FIFO` specification.
+>
+> For more information consult [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
 
 ### Platform Support
 
