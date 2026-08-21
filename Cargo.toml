@@ -31,7 +31,7 @@ members = [
 
 [workspace.package]
 edition = "2024"
-authors = ["Louis Meller louis.meller@icloud.com"]
+authors = ["Louis Meller <louis.meller@icloud.com>"]
 description = "Atomic, lock-free MPMC queues based on the nblfq algorithm"
 documentation = "https://docs.rs/nblf-queue"
 readme = "README.md"
