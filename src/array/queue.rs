@@ -30,6 +30,8 @@ where
 {
     /// Constructs a new `StaticQueue` with slot type `Auto`.
     /// `T` must fit into the chosen slot type
+    ///
+    /// This method may panic if storing `T` in `Auto` is deemed unsafe.
     #[track_caller]
     pub fn new() -> Self {
         Self::with_slot::<Auto>()
@@ -37,6 +39,8 @@ where
 
     /// Constructs a new `StaticQueue` with slot type `S`.
     /// `T` must fit into the slot type `S`
+    ///
+    /// This method may panic if storing `T` in `Slot` is deemed unsafe.
     #[track_caller]
     pub fn with_slot<S>() -> StaticQueue<T, N, S>
     where
@@ -111,12 +115,16 @@ mod pooled_static {
     #[allow(private_bounds)]
     impl<T, const N: usize> PooledStaticQueue<T, N, Auto> {
         /// Constructs a new `PooledStaticQueue` with slot type `Auto`
+        ///
+        /// This method may panic if storing `T` in `Auto` is deemed unsafe.
         #[track_caller]
         pub fn new() -> Self {
             Self::with_slot::<Auto>()
         }
 
         /// Constructs a new `PooledStaticQueue` with slot type `S`
+        ///
+        /// This method may panic if storing `T` in `Slot` is deemed unsafe.
         #[track_caller]
         pub fn with_slot<S>() -> PooledStaticQueue<T, N, S>
         where

@@ -32,12 +32,16 @@ where
 {
     /// Constructs a new `Queue` with capacity `size` and slot type `Auto`.
     /// `T` must fit into the chosen slot type
+    ///
+    /// This method may panic if storing `T` in `Auto` is deemed unsafe.
     pub fn new(size: usize) -> Self {
         Self::with_slot::<Auto>(size)
     }
 
     /// Constructs a new `Queue` with capacity `size` and slot type `S`.
     /// `T` must fit into the slot type `S`
+    ///
+    /// This method may panic if storing `T` in `Slot` is deemed unsafe.
     pub fn with_slot<S>(size: usize) -> Queue<T, S>
     where
         S: SlotType<T>,
@@ -96,11 +100,15 @@ mod pooled_queue {
     #[allow(private_bounds)]
     impl<T> PooledQueue<T, Auto> {
         /// Constructs a new `PooledQueue` with capacity `size` and slot type `Auto`
+        ///
+        /// This method may panic if storing `T` in `Auto` is deemed unsafe.
         pub fn new(size: usize) -> Self {
             Self::with_slot::<Auto>(size)
         }
 
         /// Constructs a new `PooledQueue` with capacity `size` and slot type `S`
+        ///
+        /// This method may panic if storing `T` in `Slot` is deemed unsafe.
         pub fn with_slot<S>(size: usize) -> PooledQueue<T, S>
         where
             S: SlotType<ItemHandle<T>>,

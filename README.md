@@ -114,15 +114,16 @@ Do you want to resize your queue? -> Use `Dynamic*`.
 > [!WARNING]
 > **Ordering and locking behaviour in DynamicQueues**
 >
-> The [`Resize::resize`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.Resize.html#tymethod.resize) operation in [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) may block.
-> Thus if [`Resize::resize`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.Resize.html#tymethod.resize) is taken into account [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) are NOT strictly lock-free.
+> The [`Resize::resize`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.Resize.html#tymethod.resize) operation in [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) may block on the global allocator.
+> Thus if [`Resize::resize`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.Resize.html#tymethod.resize) and the global allocator are taken into account [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) are NOT strictly lock-free.
 > However [`MPMCQueue::push`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.MPMCQueue.html#tymethod.push) and [`MPMCQueue::pop`](https://docs.rs/nblf-queue/latest/nblf_queue/trait.MPMCQueue.html#tymethod.pop) are guaranteed to never block.
 >
 > [`DynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/queue/struct.DynamicQueue.html) and [`PooledDynamicQueue`](https://docs.rs/nblf-queue/latest/nblf_queue/growable/pooled/struct.PooledDynamicQueue.html) do not have strict FIFO ordering if concurrent resizes are happening.
-> In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-> Note that `linearizability` is still guaranteed uner all circumstances under the queues `k-FIFO` specification.
+> In particular, during a resize these queues exhibit `k-FIFO` ordering.
+> Note that `linearizability` is still guaranteed under all circumstances under the queues `k-FIFO` specification.
+> Note further that `empty-linearizability` is always guaranteed.
 >
-> For more information consult [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
+> For more information, including bounds on the rank-error and delay of the relaxed FIFO specification, consult [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
 
 ### Platform Support
 

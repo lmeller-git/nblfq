@@ -101,12 +101,12 @@ cfg_atomic_tagged64! {
                 const {
                     assert!(
                         Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH,
-                        "the stored item must be representable with 48 or less bits"
+                        "the stored item must be representable with 48 or less bits. Consider using a `Tagged128` or a `PooledQueue`."
                     );
                 };
 
                 if Self::MAX_CARGO_BIT_WIDTH < size_of::<T>() * 8 && !<T as AsPackedValue>::is_rt_safe() {
-                    panic!("Trying to store a type that is not encodeable in a packed 64bit slot (48 bits) is unsafe");
+                    panic!("Trying to store a type that is not encodeable in a packed 64bit slot (48 bits) is unsafe. Consider using a `Tagged128` or a `PooledQueue`.");
                 }
 
                 Self {
@@ -226,12 +226,12 @@ cfg_atomic_tagged128! {
                 const {
                     assert!(
                         Self::MAX_CARGO_BIT_WIDTH >= T::MIN_BIT_WIDTH,
-                        "the stored item must be representable with 64 or less bits"
+                        "the stored item must be representable with 64 or less bits. Consider using a `PooledQueue`."
                     );
                 };
 
                 if Self::MAX_CARGO_BIT_WIDTH < size_of::<T>() * 8 && !<T as AsPackedValue>::is_rt_safe() {
-                    panic!("Trying to store a type that is not encodeable in a packed 128bit slot (64 bits) is unsafe");
+                    panic!("Trying to store a type that is not encodeable in a packed 128bit slot (64 bits) is unsafe. Consider using a `PooledQueue`.");
                 }
 
                 Self {

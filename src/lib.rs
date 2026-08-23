@@ -100,15 +100,16 @@
 //! > [!WARNING]
 //! > **Ordering and locking behaviour in DynamicQueues**
 //! >
-//! > The [`Resize::resize`] operation in [`DynamicQueue`] and [`PooledDynamicQueue`] may block.
-//! > Thus if [`Resize::resize`] is taken into account [`DynamicQueue`] and [`PooledDynamicQueue`] are NOT strictly lock-free.
+//! > The [`Resize::resize`] operation in [`DynamicQueue`] and [`PooledDynamicQueue`] may block on the global allocator.
+//! > Thus if [`Resize::resize`] and the global allocator are taken into account [`DynamicQueue`] and [`PooledDynamicQueue`] are NOT strictly lock-free.
 //! > However [`MPMCQueue::push`] and [`MPMCQueue::pop`] are guaranteed to never block.
 //! >
 //! > [`DynamicQueue`] and [`PooledDynamicQueue`] do not have strict FIFO ordering if concurrent resizes are happening.
-//! > In particular, during a resize these queues exhibit `k-FIFO` ordering where `k` is the number of concurrent calls to pop.
-//! > Note that `linearizability` is still guaranteed uner all circumstances under the queues `k-FIFO` specification.
+//! > In particular, during a resize these queues exhibit `k-FIFO` ordering.
+//! > Note that `linearizability` is still guaranteed under all circumstances under the queues `k-FIFO` specification.
+//! > Note further that `empty-linearizability` is always guaranteed.
 //! >
-//! > For more information consult [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
+//! > For more information, including bounds on the rank-error and delay of the relaxed FIFO specification, consult [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
 //!
 //! ## Platform Support
 //!
@@ -370,9 +371,12 @@ pub trait MPMCQueue {
 
 /// An extension trait for `MPMCQueue` that allows dynamic resizing of the queue.
 ///
-/// This trait makes **no** guarantees regarding the blocking behavior of the `resize` method itself.
-/// It only guarantees that the core `MPMCQueue` operations maintain their original guarantees
-/// and that the resize operation is atomically published to other threads.
+/// The [`Resize::resize`] method may block on the global allocator.
+/// The resize is atomically published to other threads.
+///
+/// The specification of the queue may be relaxed during a resize.
+///
+/// For a more detailed explanation refer to [`mpmc-resize`](https://crates.io/crates/mpmc-resize).
 ///
 /// # Examples
 ///
@@ -407,8 +411,9 @@ pub trait MPMCQueue {
 pub trait Resize: MPMCQueue {
     /// Attempts to resize the capacity of the queue to `size` slots.
     ///
-    /// **Note:** This method may block or fail spuriously.
+    /// **Note:** This method may block on the global allocator and fail spuriously.
     /// Further a growth event may not be considered finished in regards of an other `resize` being possible until some time after the call to `resize`.
+    /// While the growth event is not finished, the specification of the queue may be relaxed.
     ///
     /// Returns `true` if the resize was successfull, or `false` if
     /// it failed. Failure can occur due to allocator exhaustion, thread
